@@ -40,3 +40,16 @@ FloatAverage_t floatAverageClass::getAverage() {
 }
 
 
+FloatAverage_t floatAverageClass::getLeastAddedValue() {
+	if(this->IndexNextValue==0)
+		return this->aData[SIZE_OF_AVG-1];
+	else
+		return this->aData[this->IndexNextValue-1];
+}
+
+FloatAverage_t floatAverageClass::getOldestAddedValue() {
+	return this->aData[this->IndexNextValue];
+}
+
+
+
