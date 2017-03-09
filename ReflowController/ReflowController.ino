@@ -2,6 +2,7 @@
  ESTechnical Reflow Oven Controller
 
  Ed Simmons 2012-2015
+ Michael Groene 2017
 
  http://www.estechnical.co.uk
 
@@ -10,16 +11,13 @@
  http://www.estechnical.co.uk/reflow-ovens/estechnical-reflow-oven
  */
 
-//#define DEBUG
-#define stopKeyInputPin 7
+#include "config.h"
 
-#define fanOutPin 8
-#define heaterOutPin 9
-
-String ver = "2.7"; // bump minor version number on small changes, major on large changes, eg when eeprom layout changes
+String ver = "base2.7_v0.1"; // bump minor version number on small changes, major on large changes, eg when eeprom layout changes
 
 #include <MemoryFree.h>
 
+#include "temperatur.h"
 #include <MAX31855.h>
 #define tcUpdateInterval 100
 #define cs1 10
@@ -36,23 +34,17 @@ struct profileValues {
   double rampUpRate;
   double rampDownRate;
 } activeProfile;
-
-#define idleTemp 50 // the temperature at which to consider the oven safe to leave to cool naturally
-
-int fanAssistSpeed = 35; // default fan speed
-
-#define offsetFanSpeed 481 // 30 * 16 + 1 one byte wide
-#define offsetProfileNum 482 // 30 * 16 + 2 one byte wide
-
 int profileNumber = 0;
 
+int fanAssistSpeed = FAN_DEFAULT_SPEED; // default fan speed
+
+
+
+
 #include <EEPROM.h>
-
 #include <PID_v1.h>
-
 #include <LiquidCrystal.h>
 #include <ParLCD.h>
-
 ParLCD lcd(19, 18, 17, 16, 15, 14);   
 
 #include <Encoder.h> // needed by the menu
@@ -96,14 +88,13 @@ MenuItemAction factory_reset;
 // PID variables
 double Setpoint, Input, Output;
 
-#define WindowSize 100
 unsigned long windowStartTime;
 
 unsigned long startTime, stateChangedTime = 0, lastUpdate = 0, lastDisplayUpdate = 0, lastSerialOutput = 0; // a handful of timer variables
 
 //Define the PID tuning parameters
-double Kp = 4, Ki = 0.05, Kd = 2;
-double fanKp = 1, fanKi = 0.03, fanKd = 10;
+double    Kp = HEATER_Kp,    Ki = HEATER_Ki,    Kd = HEATER_Kd;
+double fanKp = FAN_Kp,    fanKi = FAN_Ki,    fanKd = FAN_Kd;
 
 //Specify the links and initial tuning parameters
 PID PID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
@@ -114,11 +105,11 @@ void loadProfile(unsigned int);
 void saveProfile(unsigned int);
 
 //bits for keeping track of the temperature ramp
+//TODO: rework this to use with floatAverage...
 #define NUMREADINGS 10
 double airTemp[NUMREADINGS];
 double runningTotalRampRate;
 double rampRate = 0;
-
 double rateOfRise = 0; // the result that is displayed
 
 // state machine bits
