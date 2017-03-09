@@ -13,7 +13,7 @@
 
 #include "config.h"
 
-String ver = "base2.7_v0.1"; // bump minor version number on small changes, major on large changes, eg when eeprom layout changes
+String ver = "base2.7_v0.2"; // bump minor version number on small changes, major on large changes, eg when eeprom layout changes
 
 #include <MemoryFree.h>
 
@@ -97,9 +97,6 @@ void loadProfile(unsigned int);
 void saveProfile(unsigned int);
 
 //bits for keeping track of the temperature ramp
-//TODO: rework this to use with floatAverage...
-#define NUMREADINGS 10
-double airTemp[NUMREADINGS];
 double rampRate = 0;
 double rateOfRise = 0; // the result that is displayed
 
@@ -119,8 +116,8 @@ boolean lastStopPinState = true;
 
 void abortWithError(int error) {
   // set outputs off for safety.
-  digitalWrite(heaterOutPin, LOW);
-  digitalWrite(fanOutPin, LOW);
+  digitalWrite(SSR1_PIN, LOW);
+  digitalWrite(SSR2_PIN, LOW);
 
   lcd.clear();
 
@@ -373,6 +370,7 @@ void setup()
 
   displaySplash(); // nothing else modifies the LCD display until the loop runs...
 
+  //init temp-measurement and set averaging filter to first measured value
   therm0.setup(TEMP0_ADC);
   therm1.setup(TEMP1_ADC);
   
@@ -386,8 +384,8 @@ void setup()
   pinMode(ENCODER_BUTTON_PIN, INPUT);
   digitalWrite(ENCODER_BUTTON_PIN, HIGH);
   
-  pinMode(fanOutPin, OUTPUT);
-  pinMode(heaterOutPin, OUTPUT);
+  pinMode(SSR2_PIN, OUTPUT);
+  pinMode(SSR1_PIN, OUTPUT);
 
   PID.SetOutputLimits(0, WindowSize);
   //turn the PID on
@@ -397,11 +395,6 @@ void setup()
     abortWithError(3);
   }
   
-  // not sure this is needed in this form any more...
-  for (int i = 0; i < NUMREADINGS; i++) {
-    airTemp[i] = therm0.getTemperature();
-  }
-
   while ((millis() < 5000) && (isStopKeyPressed() == false)) {}; // interruptible delay to show the splash screen
 
   startTime = millis();
@@ -422,17 +415,17 @@ void loop()
     stateChanged = false;
     lastUpdate = millis();
 
+    //read temperatures from ADC
+    therm0.triggerTemperatureMeasurement();
+    therm1.triggerTemperatureMeasurement();
+    
     if (therm0.getStatus() != 0) {
       abortWithError(3);
     }
 
-    // need to keep track of a few past readings in order to work out rate of rise
-    for (int i = 1; i < NUMREADINGS; i++) { // iterate over all previous entries, moving them backwards one index
-      airTemp[i - 1] = airTemp[i];
-    }
-    airTemp[NUMREADINGS - 1] = therm0.getTemperature(); // update the last index with the newest average
-    rampRate = (airTemp[NUMREADINGS - 1] - airTemp[0]); // subtract earliest reading from the current one
-    // this gives us the rate of rise in degrees per polling cycle time/ num readings
+    //TODO: check math SIZE_OF_AVG and update cycle...
+    rampRate = (therm0.oAverageFilter.getLeastAddedValue() - therm0.oAverageFilter.getOldestAddedValue()) / SIZE_OF_AVG; // subtract earliest reading from the current one
+    // this gives us the rate of rise in degrees per polling cycle time/ SIZE_OF_AVG
 
     Input = therm0.getTemperature(); // update the variable the PID reads
     //Serial.print("Temp1= ");
@@ -488,7 +481,7 @@ void loop()
           PID.SetMode(AUTOMATIC);
           PID.SetControllerDirection(DIRECT);
           PID.SetTunings(Kp, Ki, Kd);
-          Setpoint = airTemp[NUMREADINGS - 1];
+          Setpoint = therm0.getTemperature();    //start at current measured temeprature in the moment of changing state
           stateChanged = false;
         }
         Setpoint += (activeProfile.rampUpRate / 10); // target set ramp up rate
@@ -587,17 +580,17 @@ void loop()
   }
 
   if (heaterValue < millis() - windowStartTime) {
-    digitalWrite(heaterOutPin, LOW);
+    digitalWrite(SSR1_PIN, LOW);
   }
   else {
-    digitalWrite(heaterOutPin, HIGH);
+    digitalWrite(SSR1_PIN, HIGH);
   }
 
   if (fanValue < millis() - windowStartTime) {
-    digitalWrite(fanOutPin, LOW);
+    digitalWrite(SSR2_PIN, LOW);
   }
   else {
-    digitalWrite(fanOutPin, HIGH);
+    digitalWrite(SSR2_PIN, HIGH);
   }
 }
 

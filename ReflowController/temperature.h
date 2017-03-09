@@ -2,6 +2,7 @@
 #define TEMPERATURE_H
 
 #include <Arduino.h>
+#include "floatAverage.h"
 
 //temperature table
 #define TEMPTABLE_ITEMS 64
@@ -76,12 +77,30 @@ const short temptable[TEMPTABLE_ITEMS][2] /*PROGMEM*/ = {
 
 class temperatureSensorClass {
   public:
-    
+
+    //ADC-Pin to read from
     uint8_t pin;
-    
+
+    //have current temperature (averaged) in cache
+    double temperature;
+
+    //object to hold the average-filter
+    floatAverageClass oAverageFilter;
+
+
+    //initialize
     void setup(uint8_t pin);
+
+    //read adc, update filter and update temperature in cache
+    void triggerTemperatureMeasurement();
+
+    //return cached temperature
     double getTemperature();
+
+    //TODO: implement some checks if readings are illegal
     uint8_t getStatus();
+
+    
     
 };
 

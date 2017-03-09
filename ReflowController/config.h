@@ -12,6 +12,9 @@
 #define PROFILE_DEFAULT_rampDownRate  3.0;
 #define FAN_DEFAULT_SPEED 33
 
+#define idleTemp        50 // the temperature at which to consider the oven safe to leave to cool naturally
+
+
 // -------------------- Control
 #define WindowSize 100
 
@@ -22,15 +25,9 @@
 #define FAN_Ki      0.03
 #define FAN_Kd      10.0
 
-
 // -------------------- Actuators, Heater, Fans
-#define fanOutPin       11
-#define heaterOutPin    12
-
-#define idleTemp        50 // the temperature at which to consider the oven safe to leave to cool naturally
-
-
-
+#define SSR1_PIN    12
+#define SSR2_PIN    11
 
 // -------------------- Sensors, Buttons, Encoders
 #define TEMP0_ADC 0

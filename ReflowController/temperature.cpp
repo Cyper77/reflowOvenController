@@ -6,9 +6,12 @@ void temperatureSensorClass::setup(uint8_t pin) {
   this->pin=pin;
 
   analogRead(this->pin);
+  this->oAverageFilter.setAverage(analogRead(this->pin));
+
+  
 }
 
-double temperatureSensorClass::getTemperature() {
+void temperatureSensorClass::triggerTemperatureMeasurement() {
   //return read value
   int rawtemp = analogRead(this->pin);
   
@@ -36,7 +39,13 @@ double temperatureSensorClass::getTemperature() {
   if (i == (TEMPTABLE_ITEMS-1))
     current_celsius = 0;
 
-  return current_celsius;
+  this->oAverageFilter.AddToFloatAverage(current_celsius);
+  this->temperature=this->oAverageFilter.getAverage();
+
+}
+
+double temperatureSensorClass::getTemperature() {
+  return this->temperature;
 }
 
 uint8_t temperatureSensorClass::getStatus() {
