@@ -4,6 +4,20 @@
   Ed Simmons 2012-2015
   Michael Groene 2017
 
+  bases on v2.7 (checkout XXX) of ESTechnical
+
+  Changes
+  -------
+  v0.2
+    - optimized for Arduino Uno
+    - UI via Encoder and Pushbutton
+    - use FilterAverage-Lib
+    - Use 100k NTC as temperature sensor (standard in 3D-printing)
+    - Safety-Checks regarding temperature (TODO)
+    - ramp-rate calc in combination with new FilterAverage-Lib (check that)
+    - PID-Autotune (TODO)
+    - BEEPER (TODO)
+
   http://www.estechnical.co.uk
 
   http://www.estechnical.co.uk/reflow-controllers/t962a-reflow-oven-controller-upgrade
@@ -340,16 +354,6 @@ void setupMenu()
   lcd.createChar(0, deltaChar);
 }
 
-void displaySplash()
-{
-  lcd.print(" ESTechnical.co.uk");
-  lcd.setCursor(0, 1);
-  lcd.print(" Reflow controller");
-  lcd.setCursor(7, 2);
-  lcd.print("v");
-  lcd.print(ver);
-}
-
 void setup()
 {
   Serial.begin(SERIAL_BAUD);
@@ -368,7 +372,6 @@ void setup()
 
   loadFanSpeed();
 
-  displaySplash(); // nothing else modifies the LCD display until the loop runs...
 
   //init temp-measurement and set averaging filter to first measured value
   therm0.setup(TEMP0_ADC);
@@ -395,7 +398,6 @@ void setup()
     abortWithError(3);
   }
   
-  while ((millis() < 5000) && (isStopKeyPressed() == false)) {}; // interruptible delay to show the splash screen
 
   startTime = millis();
   myMenu.showCurrent();
@@ -406,11 +408,13 @@ void setup()
 void loop()
 {
 
+  //every 250ms
   if (millis() - lastSerialOutput > 250) {
     lastSerialOutput = millis();
     sendSerialUpdate();
   }
-  
+
+  // every 100ms
   if (millis() - lastUpdate >= 100) {
     stateChanged = false;
     lastUpdate = millis();
@@ -424,7 +428,7 @@ void loop()
     }
 
     //TODO: check math SIZE_OF_AVG and update cycle...
-    rampRate = (therm0.oAverageFilter.getLeastAddedValue() - therm0.oAverageFilter.getOldestAddedValue()) / SIZE_OF_AVG; // subtract earliest reading from the current one
+    rampRate = (therm0.oAverageFilter.getLeastAddedValue() - therm0.oAverageFilter.getOldestAddedValue()) * 1000 / SIZE_OF_AVG; // subtract earliest reading from the current one
     // this gives us the rate of rise in degrees per polling cycle time/ SIZE_OF_AVG
 
     Input = therm0.getTemperature(); // update the variable the PID reads

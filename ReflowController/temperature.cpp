@@ -2,16 +2,52 @@
 #include <avr/pgmspace.h>
 
 void temperatureSensorClass::setup(uint8_t pin) {
-  //init and first meas, set average
+  
+  //store pin local
   this->pin=pin;
-
+  
+  //dummy readout->throw away
   analogRead(this->pin);
-  this->oAverageFilter.setAverage(analogRead(this->pin));
 
+  //init filter
+  this->oAverageFilter.setAverage(analogRead(this->pin));
   
 }
 
+// Derived in parts from MarlinFW
 void temperatureSensorClass::triggerTemperatureMeasurement() {
+  //get raw value
+  int rawtemp = analogRead(this->pin);
+  
+  double celsius;
+
+  
+  byte i;
+  short(*tt)[][2] = (short(*)[][2])(temptable);
+  for (i = 1; i < (TEMPTABLE_ITEMS-1); i++) {
+    if (PGM_RD_W((*tt)[i][0]) > rawtemp) {
+       celsius = PGM_RD_W((*tt)[i - 1][1]) +
+                (rawtemp - PGM_RD_W((*tt)[i - 1][0])) *
+                (float)(PGM_RD_W((*tt)[i][1]) - PGM_RD_W((*tt)[i - 1][1])) /
+                (float)(PGM_RD_W((*tt)[i][0]) - PGM_RD_W((*tt)[i - 1][0]));
+      break;
+    }
+  }
+
+
+  // Overflow: Set to last value in the table
+  if (i == (TEMPTABLE_ITEMS-1))
+    celsius = PGM_RD_W((*tt)[(TEMPTABLE_ITEMS-1)][1]);
+
+  //add new value to rolling average filter
+  this->oAverageFilter.AddToFloatAverage(celsius);
+
+  //calculate new averaged result and store in cache for further use in main program
+  this->temperature=this->oAverageFilter.getAverage();
+  
+}
+
+void temperatureSensorClass::triggerTemperatureMeasurement_old() {
   //return read value
   int rawtemp = analogRead(this->pin);
   
@@ -21,10 +57,6 @@ void temperatureSensorClass::triggerTemperatureMeasurement() {
   for (i = 1; i < (TEMPTABLE_ITEMS-1); i++) {
     if (temptable[i][0] > rawtemp) {
       double realtemp  = temptable[i - 1][1] + (rawtemp - temptable[i - 1][0]) * (temptable[i][1] - temptable[i - 1][1]) / (temptable[i][0] - temptable[i - 1][0]);
-      
-    /*if (pgm_read_word(temptable[i][0]) > rawtemp) {
-      double realtemp  = (short)pgm_read_word(&(temptable[i - 1][1])) + (rawtemp - (short)pgm_read_word(&(temptable[i - 1][0]))) * (short)(pgm_read_word(&(temptable[i][1])) - (short)pgm_read_word(&(temptable[i - 1][1]))) / (short)(pgm_read_word(&(temptable[i][0])) - (short)pgm_read_word(&(temptable[i - 1][0])));
-      */
       
       if (realtemp > 300)
         realtemp = 300;

@@ -4,9 +4,11 @@
 #include <Arduino.h>
 #include "floatAverage.h"
 
+#define PGM_RD_W(x) (short)pgm_read_word(&x)
+
 //temperature table
 #define TEMPTABLE_ITEMS 64
-const short temptable[TEMPTABLE_ITEMS][2] /*PROGMEM*/ = {
+const short temptable[TEMPTABLE_ITEMS][2] PROGMEM = {
   {   23, 300 },
   {   25, 295 },
   {   27, 290 },
@@ -76,22 +78,24 @@ const short temptable[TEMPTABLE_ITEMS][2] /*PROGMEM*/ = {
 
 
 class temperatureSensorClass {
+  private:
+    //have current temperature (averaged) in cache
+    double temperature;
+
+  
   public:
 
     //ADC-Pin to read from
     uint8_t pin;
 
-    //have current temperature (averaged) in cache
-    double temperature;
-
     //object to hold the average-filter
     floatAverageClass oAverageFilter;
-
 
     //initialize
     void setup(uint8_t pin);
 
     //read adc, update filter and update temperature in cache
+    void triggerTemperatureMeasurement_old();
     void triggerTemperatureMeasurement();
 
     //return cached temperature
