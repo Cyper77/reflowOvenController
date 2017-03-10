@@ -29,8 +29,6 @@
 
 String ver = "base2.7_v0.2"; // bump minor version number on small changes, major on large changes, eg when eeprom layout changes
 
-#include <MemoryFree.h>
-
 #include "temperature.h"
 temperatureSensorClass therm0;
 temperatureSensorClass therm1;
@@ -130,13 +128,14 @@ boolean lastStopPinState = true;
 
 void abortWithError(int error) {
   // set outputs off for safety.
-  digitalWrite(SSR1_PIN, LOW);
-  digitalWrite(SSR2_PIN, LOW);
+  digitalWrite(HEATING_PIN, LOW);
+  digitalWrite(FAN_PIN, LOW);
 
   lcd.clear();
 
-  Serial.println("abortWithError");
-
+  Serial.print(F("abortWithError No: "));
+  Serial.println(error);
+  
   switch (error) {
     case 1:
       lcd.print(F("Temperature"));
@@ -145,15 +144,6 @@ void abortWithError(int error) {
       lcd.setCursor(0, 2);
       lcd.print(F("during heating"));
       break;
-    /*
-      case 2:
-      lcd.print("Temperature");
-      lcd.setCursor(0,1);
-      lcd.print("following error");
-      lcd.setCursor(0,2);
-      lcd.print("during cooling");
-      break;
-    */
     case 3:
       lcd.print(F("Thermoelement input"));
       lcd.setCursor(0, 1);
@@ -387,10 +377,12 @@ void setup()
   pinMode(ENCODER_BUTTON_PIN, INPUT);
   digitalWrite(ENCODER_BUTTON_PIN, HIGH);
   
-  pinMode(SSR2_PIN, OUTPUT);
-  pinMode(SSR1_PIN, OUTPUT);
+  pinMode(FAN_PIN, OUTPUT);
+  pinMode(HEATING_PIN, OUTPUT);
 
   PID.SetOutputLimits(0, WindowSize);
+  PID.SetSampleTime(100);
+  
   //turn the PID on
   PID.SetMode(AUTOMATIC);
 
@@ -421,7 +413,7 @@ void loop()
       abortWithError(3);
     }
 
-    rampRate = (double)(therm0.oAverageFilter.getLeastAddedValue() - therm0.oAverageFilter.getOldestAddedValue()) * 10 / (SIZE_OF_AVG-1); // subtract earliest reading from the current one
+    rampRate = (therm0.oAverageFilter.getLeastAddedValue() - therm0.oAverageFilter.getOldestAddedValue()) * 10 / (SIZE_OF_AVG-1); // subtract earliest reading from the current one
     // this gives us the rate of rise in degrees per second
 
     Input = therm0.getTemperature(); // update the variable the PID reads
@@ -451,7 +443,6 @@ void loop()
     }
 
     // check for the stop key being pressed
-
     boolean stopPin = digitalRead(stopKeyInputPin); // check the state of the stop key
     if (stopPin == LOW && lastStopPinState != stopPin) { // if the state has just changed
       if (currentState == coolDown) {
@@ -474,7 +465,7 @@ void loop()
         //Serial.println("ramp");
         if (stateChanged) {
           PID.SetMode(MANUAL);
-          Output = 50;
+          Output = 80;
           PID.SetMode(AUTOMATIC);
           PID.SetControllerDirection(DIRECT);
           PID.SetTunings(Kp, Ki, Kd);
@@ -583,17 +574,17 @@ void loop()
   }
 
   if (heaterValue < millis() - windowStartTime) {
-    digitalWrite(SSR1_PIN, LOW);
+    digitalWrite(HEATING_PIN, LOW);
   }
   else {
-    digitalWrite(SSR1_PIN, HIGH);
+    digitalWrite(HEATING_PIN, HIGH);
   }
 
   if (fanValue < millis() - windowStartTime) {
-    digitalWrite(SSR2_PIN, LOW);
+    digitalWrite(FAN_PIN, LOW);
   }
   else {
-    digitalWrite(SSR2_PIN, HIGH);
+    digitalWrite(FAN_PIN, HIGH);
   }
 
   

@@ -27,13 +27,12 @@
 #define FAN_Kd      10.0
 
 // -------------------- Actuators, Heater, Fans
-#define SSR1_PIN    12
-#define SSR2_PIN    11
+#define HEATING_PIN    12
+#define FAN_PIN    11
 
 // -------------------- Sensors, Buttons, Encoders
 #define TEMP0_ADC 0
 #define TEMP1_ADC 1
-#define TEMP2_ADC 2
 
 #define stopKeyInputPin     7
 #define ENCODER_A_PIN       2
