@@ -94,9 +94,11 @@ class temperatureSensorClass {
     //initialize
     void setup(uint8_t pin);
 
-    //read adc, update filter and update temperature in cache
-    void triggerTemperatureMeasurement_old();
+    //organizes temperature readings and internal updates. to be triggered by main program
     void triggerTemperatureMeasurement();
+
+    //read from ADC convert to celsius and return value
+    double readTemperatureCelsius();
 
     //return cached temperature
     double getTemperature();
