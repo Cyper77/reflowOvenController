@@ -2,6 +2,7 @@
 #define TEMPERATURE_H
 
 #include <Arduino.h>
+#include "config.h"
 #include "floatAverage.h"
 
 #define PGM_RD_W(x) (short)pgm_read_word(&x)
@@ -82,6 +83,7 @@ class temperatureSensorClass {
     //have current temperature (averaged) in cache
     double temperature;
 
+    uint8_t status;
   
   public:
 

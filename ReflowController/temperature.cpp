@@ -5,6 +5,9 @@ void temperatureSensorClass::setup(uint8_t pin) {
   
   //store pin local
   this->pin=pin;
+
+  //status (0=ok, otherwise error)
+  this->status=0;
   
   //dummy readout->throw away
   analogRead(this->pin);
@@ -32,6 +35,12 @@ void temperatureSensorClass::triggerTemperatureMeasurement() {
 double temperatureSensorClass::readTemperatureCelsius() {
   //get raw value
   int rawtemp = analogRead(this->pin);
+
+  //sanity check
+  if(rawtemp<=5 || rawtemp>1018) {
+    this->status=1;
+    //go on but set error flag for signaling
+  }
   
   double celsius;
 
@@ -60,7 +69,6 @@ double temperatureSensorClass::getTemperature() {
 }
 
 uint8_t temperatureSensorClass::getStatus() {
-  //no error: return 0
-  return 0;
+  return this->status;
 }
 

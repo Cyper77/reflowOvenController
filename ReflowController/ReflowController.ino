@@ -9,20 +9,19 @@
   Changes
   -------
   v0.2
-    - optimized for Arduino Uno
+    - Optimized for Arduino Uno
     - UI via Encoder and Pushbutton
     - use FilterAverage-Lib
     - Use 100k NTC as temperature sensor (standard in 3D-printing)
-    - Safety-Checks regarding temperature (TODO)
-    - ramp-rate calc in combination with new FilterAverage-Lib (check that)
+    - Safety-Check for illegal temperature reading
+    - RampRate math fixed
+  BUGS/TODOS:
     - PID-Autotune (TODO)
     - BEEPER (TODO)
     - adapt output and switching freq to the zero crossing freq (100Hz), http://playground.arduino.cc/Code/PIDLibraryRelayOutputExample
 
   http://www.estechnical.co.uk
-
   http://www.estechnical.co.uk/reflow-controllers/t962a-reflow-oven-controller-upgrade
-
   http://www.estechnical.co.uk/reflow-ovens/estechnical-reflow-oven
 */
 
@@ -156,7 +155,7 @@ void abortWithError(int error) {
       break;
     */
     case 3:
-      lcd.print(F("Thermocouple input"));
+      lcd.print(F("Thermoelement input"));
       lcd.setCursor(0, 1);
       lcd.print(F("open circuit"));
       lcd.setCursor(0, 2);
@@ -300,6 +299,7 @@ bool isStopKeyPressed()
 
 void setupMenu()
 {
+  //setup menu, which itself sets up the encoder lib and passes the PINs to it
   myMenu.init(&control, &lcd, 0, ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_BUTTON_PIN);
 
   // initialise the menu strings (stored in the progmem), min and max values, pointers to variables etc
@@ -326,8 +326,7 @@ void setupMenu()
   soak_duration.addItem(&peak_temp);
   peak_temp.addItem(&peak_duration);
   peak_duration.addItem(&rampDown_rate);
-
-
+  
   control.addItem(&profileLoad);
   control.addItem(&profileSave);
 
@@ -408,13 +407,7 @@ void setup()
 
 void loop()
 {
-
-  //every 250ms
-  if (millis() - lastSerialOutput > 250) {
-    lastSerialOutput = millis();
-    sendSerialUpdate();
-  }
-
+  
   // every 100ms
   if (millis() - lastUpdate >= 100) {
     stateChanged = false;
@@ -428,9 +421,8 @@ void loop()
       abortWithError(3);
     }
 
-    //TODO: check math SIZE_OF_AVG and update cycle...
-    rampRate = (therm0.oAverageFilter.getLeastAddedValue() - therm0.oAverageFilter.getOldestAddedValue()) * 1000 / SIZE_OF_AVG; // subtract earliest reading from the current one
-    // this gives us the rate of rise in degrees per polling cycle time/ SIZE_OF_AVG
+    rampRate = (double)(therm0.oAverageFilter.getLeastAddedValue() - therm0.oAverageFilter.getOldestAddedValue()) * 10 / (SIZE_OF_AVG-1); // subtract earliest reading from the current one
+    // this gives us the rate of rise in degrees per second
 
     Input = therm0.getTemperature(); // update the variable the PID reads
     //Serial.print("Temp1= ");
@@ -569,16 +561,22 @@ void loop()
   //if(Input > Setpoint + 50) abortWithError(2);// or 50 degrees hotter, also abort
 
   PID.Compute();
-
-  if (currentState != rampDown && currentState != coolDown && currentState != idle) { // decides which control signal is fed to the output for this cycle
+  
+  if(currentState == idle) {
+    //all off in idle mode
+    heaterValue = 0;
+    fanValue = 0;
+  } else if(currentState == rampDown || currentState == coolDown) {
+    // in cooling phases turn heater off hard and control fan instead
+    heaterValue = 0;
+    fanValue = Output;
+  } else {
+    // other phases are non-idle or heating-phases
+    // heater is controlled by PID and fan is on assisting speed
     heaterValue = Output;
     fanValue = fanAssistSpeed;
   }
-  else {
-    heaterValue = 0;
-    fanValue = Output;
-  }
-
+  
   if (millis() - windowStartTime > WindowSize)
   { //time to shift the Relay Window
     windowStartTime += WindowSize;
@@ -597,6 +595,14 @@ void loop()
   else {
     digitalWrite(SSR2_PIN, HIGH);
   }
+
+  
+  //after everything is done... every 250ms
+  if (millis() - lastSerialOutput > 250) {
+    lastSerialOutput = millis();
+    sendSerialUpdate();
+  }
+
 }
 
 
@@ -835,6 +841,8 @@ void sendSerialUpdate()
     } else {
       Serial.print("999");
     }
+    Serial.print(",");
+    Serial.print(rampRate);
     Serial.println();
   } else {
 
@@ -855,6 +863,8 @@ void sendSerialUpdate()
     } else {
       Serial.print("999");
     }
+    Serial.print(",");
+    Serial.print(rampRate);
     Serial.println();
   }
 }

@@ -4,13 +4,17 @@
 #define FLOAT_AVERAGE_H
 
 #include <Arduino.h>
+#include "config.h"
 
 //#include <inttypes.h>		//adds 32-bit-integers
 #include <avr/io.h>
 
 // Ueber wieviele Werte soll der gleitende Mittelwert berechnet werden?
 // Zulaessige Werte 1..255
-#define SIZE_OF_AVG  8		//should really be 4, 8, 16 or 32 -> otherwise many bytes are wasted for div by SIZE_OF_AVG
+#ifndef SIZE_OF_AVG
+	#error SIZE_OF_AVG was not set
+	//should really be 4, 8, 16 or 32 -> otherwise many bytes are wasted for div by SIZE_OF_AVG
+#endif
 
 // Datentyp, ueber den der gleitende Mittelwert berechnet werden soll.
 typedef float FloatAverage_t;

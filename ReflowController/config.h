@@ -17,6 +17,7 @@
 
 // -------------------- Control
 #define WindowSize  100    //in ms
+#define SIZE_OF_AVG 16    // over how many values the temperature is averaged
 
 #define HEATER_Kp   4.00
 #define HEATER_Ki   0.05
