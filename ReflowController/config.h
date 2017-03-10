@@ -16,7 +16,7 @@
 
 
 // -------------------- Control
-#define WindowSize 100
+#define WindowSize  100    //in ms
 
 #define HEATER_Kp   4.00
 #define HEATER_Ki   0.05

@@ -17,6 +17,7 @@
     - ramp-rate calc in combination with new FilterAverage-Lib (check that)
     - PID-Autotune (TODO)
     - BEEPER (TODO)
+    - adapt output and switching freq to the zero crossing freq (100Hz), http://playground.arduino.cc/Code/PIDLibraryRelayOutputExample
 
   http://www.estechnical.co.uk
 
