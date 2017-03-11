@@ -97,11 +97,11 @@ unsigned long windowStartTime;
 unsigned long startTime, stateChangedTime = 0, lastUpdate = 0, lastDisplayUpdate = 0, lastSerialOutput = 0; // a handful of timer variables
 
 //Define the PID tuning parameters
-double    Kp = HEATER_Kp,    Ki = HEATER_Ki,    Kd = HEATER_Kd;
-double fanKp = FAN_Kp,    fanKi = FAN_Ki,    fanKd = FAN_Kd;
+double   heaterKp = HEATER_Kp,	heaterKi = HEATER_Ki,    heaterKd = HEATER_Kd;
+double		fanKp = FAN_Kp,		   fanKi = FAN_Ki,			fanKd = FAN_Kd;
 
 //Specify the links and initial tuning parameters
-PID PID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
+PID PID(&Input, &Output, &Setpoint, heaterKp, heaterKi, heaterKd, DIRECT);
 
 unsigned int fanValue, heaterValue;
 
@@ -110,21 +110,20 @@ void saveProfile(unsigned int);
 
 //bits for keeping track of the temperature ramp
 double rampRate = 0;
-double rateOfRise = 0; // the result that is displayed
 
 // state machine bits
 enum state {
-  idle,
-  rampToSoak,
-  soak,
-  rampToPeak,
-  peak,
-  rampDown,
-  coolDown
-} currentState = idle, lastState = idle;
+  sIDLE,
+  sRAMPTOSOAK,
+  sSOAK,
+  sRAMPTOPEAK,
+  sPEAK,
+  sRAMPDOWM,
+  sCOOLDOWN
+} currentState = sIDLE, lastState = sIDLE;
 
 boolean stateChanged = false;
-boolean lastStopPinState = true;
+boolean lastStopPinState = true;	//for debouncing
 
 void abortWithError(int error) {
   // set outputs off for safety.
@@ -202,25 +201,25 @@ void displayPaddedString(char *str, uint8_t length)
 void displayState()
 {
   switch (currentState) {
-    case idle:
+    case sIDLE:
       displayPaddedString(("Idle"), 9);
       break;
-    case rampToSoak:
+    case sRAMPTOSOAK:
       displayPaddedString(("Ramp Up"), 9);
       break;
-    case soak:
+    case sSOAK:
       displayPaddedString(("Soak"), 9);
       break;
-    case rampToPeak:
+    case sRAMPTOPEAK:
       displayPaddedString(("Ramp Up"), 9);
       break;
-    case peak:
+    case sPEAK:
       displayPaddedString(("Peak"), 9);
       break;
-    case rampDown:
+    case sRAMPDOWM:
       displayPaddedString(("Ramp Down"), 9);
       break;
-    case coolDown:
+    case sCOOLDOWN:
       displayPaddedString(("Cool Down"), 9);
       break;
   }
@@ -280,11 +279,6 @@ void updateDisplay()
 
   lcd.setCursor(0, 3);
   displayRampRate(rampRate);
-}
-
-bool isStopKeyPressed()
-{
-  return !digitalRead(stopKeyInputPin);
 }
 
 void setupMenu()
@@ -367,8 +361,8 @@ void setup()
   therm0.setup(TEMP0_ADC);
   therm1.setup(TEMP1_ADC);
   
-  pinMode(stopKeyInputPin, INPUT);
-  digitalWrite(stopKeyInputPin, HIGH);
+  pinMode(STOP_SWITCH_PIN, INPUT);
+  digitalWrite(STOP_SWITCH_PIN, HIGH);
 
   pinMode(ENCODER_A_PIN, INPUT);
   digitalWrite(ENCODER_A_PIN, HIGH);
@@ -427,7 +421,7 @@ void loop()
       stateChangedTime = millis();
     }
 
-    if (currentState == idle) {
+    if (currentState == sIDLE) {
       if (stateChanged)
       {
         myMenu.showCurrent();
@@ -443,13 +437,13 @@ void loop()
     }
 
     // check for the stop key being pressed
-    boolean stopPin = digitalRead(stopKeyInputPin); // check the state of the stop key
+    boolean stopPin = digitalRead(STOP_SWITCH_PIN); // check the state of the stop key
     if (stopPin == LOW && lastStopPinState != stopPin) { // if the state has just changed
-      if (currentState == coolDown) {
-        currentState = idle;
+      if (currentState == sCOOLDOWN) {
+        currentState = sIDLE;
       }
-      else if (currentState != idle) {
-        currentState = coolDown;
+      else if (currentState != sIDLE) {
+        currentState = sCOOLDOWN;
       }
     }
     lastStopPinState = stopPin;
@@ -457,39 +451,39 @@ void loop()
 
 
     switch (currentState) {
-      case idle:
+      case sIDLE:
         //Serial.println("Idle");
         break;
 
-      case rampToSoak:
+      case sRAMPTOSOAK:
         //Serial.println("ramp");
         if (stateChanged) {
           PID.SetMode(MANUAL);
           Output = 80;
           PID.SetMode(AUTOMATIC);
           PID.SetControllerDirection(DIRECT);
-          PID.SetTunings(Kp, Ki, Kd);
+          PID.SetTunings(heaterKp, heaterKi, heaterKd);
           Setpoint = therm0.getTemperature();    //start at current measured temeprature in the moment of changing state
           stateChanged = false;
         }
         Setpoint += (activeProfile.rampUpRate / 10); // target set ramp up rate
 
         if (Setpoint >= activeProfile.soakTemp - 1) {
-          currentState = soak;
+          currentState = sSOAK;
         }
         break;
 
-      case soak:
+      case sSOAK:
         if (stateChanged) {
           Setpoint = activeProfile.soakTemp;
           stateChanged = false;
         }
         if (millis() - stateChangedTime >= (unsigned long) activeProfile.soakDuration * 1000) {
-          currentState = rampToPeak;
+          currentState = sRAMPTOPEAK;
         }
         break;
 
-      case rampToPeak:
+      case sRAMPTOPEAK:
         if (stateChanged) {
           stateChanged = false;
         }
@@ -498,22 +492,22 @@ void loop()
 
         if (Setpoint >= activeProfile.peakTemp - 1) { // seems to take arodun 8 degrees rise to tail off to 0 rise
           Setpoint = activeProfile.peakTemp;
-          currentState = peak;
+          currentState = sPEAK;
         }
         break;
 
-      case peak:
+      case sPEAK:
         if (stateChanged) {
           Setpoint = activeProfile.peakTemp;
           stateChanged = false;
         }
 
         if (millis() - stateChangedTime >= (unsigned long) activeProfile.peakDuration * 1000) {
-          currentState = rampDown;
+          currentState = sRAMPDOWM;
         }
         break;
 
-      case rampDown:
+      case sRAMPDOWM:
         if (stateChanged) {
           PID.SetControllerDirection(REVERSE);
           PID.SetTunings(fanKp, fanKi, fanKd);
@@ -524,18 +518,18 @@ void loop()
         Setpoint -= (activeProfile.rampDownRate / 10);
 
         if (Setpoint <= idleTemp) {
-          currentState = coolDown;
+          currentState = sCOOLDOWN;
         }
         break;
 
-      case coolDown:
+      case sCOOLDOWN:
         if (stateChanged) {
           PID.SetControllerDirection(REVERSE);
           PID.SetTunings(fanKp, fanKi, fanKd);
           Setpoint = idleTemp;
         }
         if (Input < (idleTemp + 5)) {
-          currentState = idle;
+          currentState = sIDLE;
           PID.SetMode(MANUAL);
           Output = 0;
         }
@@ -553,11 +547,11 @@ void loop()
 
   PID.Compute();
   
-  if(currentState == idle) {
+  if(currentState == sIDLE) {
     //all off in idle mode
     heaterValue = 0;
     fanValue = 0;
-  } else if(currentState == rampDown || currentState == coolDown) {
+  } else if(currentState == sRAMPDOWM || currentState == sCOOLDOWN) {
     // in cooling phases turn heater off hard and control fan instead
     heaterValue = 0;
     fanValue = Output;
@@ -601,7 +595,7 @@ void loop()
 void cycleStart() {
 
   startTime = millis();
-  currentState = rampToSoak;
+  currentState = sRAMPTOSOAK;
   lcd.clear();
   lcd.print("Starting cycle ");
   lcd.print(profileNumber);
@@ -823,7 +817,7 @@ void loadLastUsedProfile() {
 void sendSerialUpdate()
 {
 
-  if (currentState == idle) {
+  if (currentState == sIDLE) {
     Serial.print(F("0,0,0,0,0,"));
     Serial.print(therm0.getTemperature());
     Serial.print(",");
