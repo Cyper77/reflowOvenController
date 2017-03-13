@@ -27,8 +27,8 @@
 #define FAN_Kd      10.0
 
 // -------------------- Actuators, Heater, Fans
-#define HEATING_PIN     12
-#define FAN_PIN         11
+#define HEATING_PIN     6
+#define FAN_PIN         5
 
 // -------------------- Sensors, Buttons, Encoders
 #define TEMP0_ADC 0
@@ -41,12 +41,12 @@
 
 
 // -------------------- LCD
-#define LCD_RS      5
-#define LCD_ENABLE  6
-#define LCD_D0      7
-#define LCD_D1      8
-#define LCD_D2      9
-#define LCD_D3      10
+#define LCD_RS      8
+#define LCD_ENABLE  9
+#define LCD_D0      10
+#define LCD_D1      11
+#define LCD_D2      12
+#define LCD_D3      13
 
 
 // -------------------- EEPROM
