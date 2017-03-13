@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
 //#define DEBUG
-#define SERIAL_BAUD 57600
+#define SERIAL_BAUD 115200
 
 // -------------------- Profile
 #define PROFILE_DEFAULT_soakTemp      130;
@@ -41,6 +41,9 @@
 
 
 // -------------------- LCD
+#define LCD_COLS 20
+#define LCD_ROWS 4
+
 #define LCD_RS      8
 #define LCD_ENABLE  9
 #define LCD_D0      10
