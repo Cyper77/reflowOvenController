@@ -17,12 +17,12 @@
 #endif
 
 // Datentyp, ueber den der gleitende Mittelwert berechnet werden soll.
-typedef float FloatAverage_t;
+typedef uint16_t FloatAverage_t;
 
 
 // Wird nur intern fuer die Durchschnittsberechnung benutzt.
 // Muss Zahlen fassen koennen, die SIZE_OF_AVG mal groesser als tFloatAvgType sind.
-typedef float TempSum_t;
+typedef uint16_t TempSum_t;
 
 
 class floatAverageClass {

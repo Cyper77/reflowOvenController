@@ -395,8 +395,7 @@ void loop() {
       abortWithError(3);
     }
 
-    rampRate = (therm0.oAverageFilter.getLeastAddedValue() - therm0.oAverageFilter.getOldestAddedValue()) * 10 / (SIZE_OF_AVG - 1); // subtract earliest reading from the current one
-    // this gives us the rate of rise in degrees per second
+    rampRate = therm0.getTemperatureRampPerDatastep() * 10; // this gives us the rate of rise in degrees per second
 
     controlInput = therm0.getTemperatureCelsius(); // update the variable the PID reads
     //Serial.print("Temp1= ");

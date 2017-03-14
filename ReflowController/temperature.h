@@ -80,32 +80,38 @@ const short temptable[TEMPTABLE_ITEMS][2] PROGMEM = {
 
 class temperatureSensorClass {
   private:
-    //have current temperature (averaged) in cache
-    uint16_t temperatureRaw;
-
-    uint8_t status;
-  
-  public:
-
     //ADC-Pin to read from
     uint8_t pin;
+    
+    //have current temperature (averaged) in cache
+    double temperature;
 
+    //holds information about status of sensor
+    uint8_t status;
+    
+    //read from ADC convert to celsius and return value
+    uint16_t readTemperatureRaw();
+    
+    //convert raw temp to celsius
+    double convertTemperature(uint16_t rawtemp);
+    
     //object to hold the average-filter
     floatAverageClass oAverageFilter;
-
+    
+  public:
     //initialize
     void setup(uint8_t pin);
 
     //organizes temperature readings and internal updates. to be triggered by main program
     void triggerTemperatureMeasurement();
 
-    //read from ADC convert to celsius and return value
-    uint16_t readTemperatureRaw();
-
+    //calculates the delta in rise of temp
+    double getTemperatureRampPerDatastep();
+    
     //return cached temperature
     double getTemperatureCelsius();
 
-    //TODO: implement some checks if readings are illegal
+    //some checks to check for illegal readings are performed while operating. returns 0: OK otherwise errror occured
     uint8_t getStatus();
 
     
