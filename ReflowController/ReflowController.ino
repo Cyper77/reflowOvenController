@@ -93,40 +93,40 @@ keyIn<1> encButton(encBtn_map);         //1 is the number of keys
 
 
 // ----------- MENU setup
-MENU(menuEditProfile, "Edit current Profile", doNothing, anyEvent, noStyle
+MENU(menuEditProfile, "Edit current Profile", doNothing, noEvent, noStyle
      , EXIT(" ^..")
-     , FIELD(activeProfile.rampUpRate,    "Ramp up rate",    "°C/s", 0.1,    5, 0.5, 0.1,  doNothing, noEvent, wrapStyle)
-     , FIELD(activeProfile.soakTemp,      "Soak temp",       "°C",   50,   180,   5, 1,    doNothing, noEvent, wrapStyle)
-     , FIELD(activeProfile.soakDuration,  "Soak time",       "s",    10,   300,   5, 1,    doNothing, noEvent, wrapStyle)
-     , FIELD(activeProfile.peakTemp,      "Peak temp",       "°C",   100,  300,   5, 1,    doNothing, noEvent, wrapStyle)
-     , FIELD(activeProfile.peakDuration,  "Peak time",       "s",    5,    120,   5, 1,    doNothing, noEvent, wrapStyle)
-     , FIELD(activeProfile.rampDownRate,  "Ramp down rate",  "°C/s", 0.1,   10, 0.5, 0.1,  doNothing, noEvent, wrapStyle)
+     , FIELD(activeProfile.rampUpRate,    "Ramp up rate",    "°C/s", 0.1,    5, 0.5, 0.1,  doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.soakTemp,      "Soak temp",       "°C",   50,   180,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.soakDuration,  "Soak time",       "s",    10,   300,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.peakTemp,      "Peak temp",       "°C",   100,  300,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.peakDuration,  "Peak time",       "s",    5,    120,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.rampDownRate,  "Ramp down rate",  "°C/s", 0.1,   10, 0.5, 0.1,  doNothing, noEvent, noStyle)
     );
 
-MENU(menuSettings, "Settings", doNothing, anyEvent, noStyle
+MENU(menuSettings, "Settings", doNothing, noEvent, noStyle
      , EXIT(" ^-")
-     , FIELD(heaterKp, "Heater kP", "", 0, 100, 1, 0.1, doNothing, noEvent, wrapStyle)
-     , FIELD(heaterKi, "Heater kI", "", 0, 100, 1, 0.1, doNothing, noEvent, wrapStyle)
-     , FIELD(heaterKd, "Heater kD", "", 0, 100, 1, 0.1, doNothing, noEvent, wrapStyle)
-     , OP("AutoTune", doNothing, anyEvent)
-     , OP("Buzzer On/Off", doNothing, anyEvent)
+     , FIELD(heaterKp, "Heater kP", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
+     , FIELD(heaterKi, "Heater kI", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
+     , FIELD(heaterKd, "Heater kD", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
+     , OP("AutoTune", doNothing, enterEvent)
+     , OP("Buzzer On/Off", doNothing, enterEvent)
     );
 
 MENU(menuManualMode, "Manual Control", doNothing, anyEvent, noStyle
      , EXIT(" ^-")
      , OP("All Off", doNothing, enterEvent )
-     , OP("Set Temperature", doNothing, anyEvent)
-     , OP("Set SSR1 Duty", doNothing, anyEvent)
-     , OP("SSR2 On/Off", doNothing, anyEvent)
+     , OP("Set Temperature", doNothing, enterEvent)
+     , OP("Set SSR1 Duty", doNothing, enterEvent)
+     , OP("SSR2 On/Off", doNothing, enterEvent)
     );
 
-MENU(menuFactoryReset, "Factory Reset", doNothing, anyEvent, noStyle
+MENU(menuFactoryReset, "Factory Reset", doNothing, noEvent, noStyle
      , EXIT(" ^-")
      , EXIT("No")
      , OP("Yes", doNothing, anyEvent)
     );
 
-MENU(mainMenu, "Main menu", doNothing, noEvent, wrapStyle
+MENU(mainMenu, "Main menu", doNothing, noEvent, noStyle
      , EXIT(" ^-Status Screen")
      , OP("Start Cycle", cycleStart, enterEvent )
      , OP("Active Profile", doNothing, enterEvent )
