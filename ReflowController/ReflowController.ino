@@ -293,11 +293,11 @@ void updateDisplay(boolean fullUpdate=false) {
   }
   
   lcd.setCursor(0, 0);
-  displayTemperature(therm0.getTemperature());
+  displayTemperature(therm0.getTemperatureCelsius());
 
   lcd.setCursor(8, 0);
   if (therm1.getStatus() == 0) {
-    displayTemperature(therm1.getTemperature());
+    displayTemperature(therm1.getTemperatureCelsius());
   } else {
     lcd.print(F(" ---"));
   }
@@ -398,7 +398,7 @@ void loop() {
     rampRate = (therm0.oAverageFilter.getLeastAddedValue() - therm0.oAverageFilter.getOldestAddedValue()) * 10 / (SIZE_OF_AVG - 1); // subtract earliest reading from the current one
     // this gives us the rate of rise in degrees per second
 
-    controlInput = therm0.getTemperature(); // update the variable the PID reads
+    controlInput = therm0.getTemperatureCelsius(); // update the variable the PID reads
     //Serial.print("Temp1= ");
     //Serial.println(readings[index]);
 
@@ -446,7 +446,7 @@ void loop() {
           controlOutput = 80;
           PID.SetControllerDirection(DIRECT);
           PID.SetTunings(heaterKp, heaterKi, heaterKd);
-          controlSetpoint = therm0.getTemperature();    //start at current measured temeprature in the moment of changing state
+          controlSetpoint = therm0.getTemperatureCelsius();    //start at current measured temeprature in the moment of changing state
           PID.SetMode(AUTOMATIC);
           stateChanged = false;
         }
@@ -780,10 +780,10 @@ void sendSerialUpdate() {
 
   if (currentState == sIDLE) {
     Serial.print(F("0,0,0,0,"));
-    Serial.print(therm0.getTemperature());
+    Serial.print(therm0.getTemperatureCelsius());
     Serial.print(",");
     if (therm1.getStatus() == 0) {
-      Serial.print(therm1.getTemperature());
+      Serial.print(therm1.getTemperatureCelsius());
     } else {
       Serial.print("999");
     }
@@ -801,10 +801,10 @@ void sendSerialUpdate() {
     //Serial.print(",");
     //Serial.print(fanValue);
     Serial.print(",");
-    Serial.print(therm0.getTemperature());
+    Serial.print(therm0.getTemperatureCelsius());
     Serial.print(",");
     if (therm1.getStatus() == 0) {
-      Serial.print(therm1.getTemperature());
+      Serial.print(therm1.getTemperatureCelsius());
     } else {
       Serial.print("999");
     }

@@ -81,7 +81,7 @@ const short temptable[TEMPTABLE_ITEMS][2] PROGMEM = {
 class temperatureSensorClass {
   private:
     //have current temperature (averaged) in cache
-    double temperature;
+    uint16_t temperatureRaw;
 
     uint8_t status;
   
@@ -100,10 +100,10 @@ class temperatureSensorClass {
     void triggerTemperatureMeasurement();
 
     //read from ADC convert to celsius and return value
-    double readTemperatureCelsius();
+    uint16_t readTemperatureRaw();
 
     //return cached temperature
-    double getTemperature();
+    double getTemperatureCelsius();
 
     //TODO: implement some checks if readings are illegal
     uint8_t getStatus();

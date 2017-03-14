@@ -13,28 +13,28 @@ void temperatureSensorClass::setup(uint8_t pin) {
   analogRead(this->pin);
 
   //init filter
-  this->oAverageFilter.setAverage(this->readTemperatureCelsius());
+  this->oAverageFilter.setAverage(this->readTemperatureRaw());
   
 }
 
 
 void temperatureSensorClass::triggerTemperatureMeasurement() {
-  double celsius;
+  uint16_t rawtemp;
 
   //read temp and convert to celsius
-  celsius=this->readTemperatureCelsius();
+  rawtemp=this->readTemperatureRaw();
   
   //add new value to rolling average filter
-  this->oAverageFilter.AddToFloatAverage(celsius);
+  this->oAverageFilter.AddToFloatAverage(rawtemp);
 
   //calculate new averaged result and store in cache for further use in main program
-  this->temperature=this->oAverageFilter.getAverage();
+  this->temperatureRaw=this->oAverageFilter.getAverage();
   
 }
 
-double temperatureSensorClass::readTemperatureCelsius() {
+uint16_t temperatureSensorClass::readTemperatureRaw() {
   //get raw value
-  int rawtemp = analogRead(this->pin);
+  uint16_t rawtemp = analogRead(this->pin);
 
   //sanity check
   if(rawtemp<=5 || rawtemp>1018) {
@@ -42,6 +42,11 @@ double temperatureSensorClass::readTemperatureCelsius() {
     //go on but set error flag for signaling
   }
   
+  return rawtemp;
+}
+
+double temperatureSensorClass::getTemperatureCelsius() {
+  uint16_t rawtemp = this->temperatureRaw;
   double celsius;
 
   byte i;
@@ -62,10 +67,6 @@ double temperatureSensorClass::readTemperatureCelsius() {
     celsius = PGM_RD_W((*tt)[(TEMPTABLE_ITEMS-1)][1]);
 
   return celsius;
-}
-
-double temperatureSensorClass::getTemperature() {
-  return this->temperature;
 }
 
 uint8_t temperatureSensorClass::getStatus() {
