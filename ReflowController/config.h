@@ -2,6 +2,7 @@
 
 //#define DEBUG
 #define SERIAL_BAUD 115200
+#define ENABLE_SERIAL_MENU 0
 
 // -------------------- Profile
 #define PROFILE_DEFAULT_soakTemp      130;
@@ -53,6 +54,9 @@
 
 
 // -------------------- EEPROM
-#define offsetFanSpeed 481 // 30 * 16 + 1 one byte wide
-#define offsetProfileNum 482 // 30 * 16 + 2 one byte wide
+#define NUMBER_OF_STORED_PROFILES 10
+// don't change the following defines
+#define AMOUNT_EEPROM_PER_PROFILE 16
+#define offsetFanSpeed    NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+1 // 30 * 16 + 1 one byte wide
+#define offsetProfileNum  NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+2 // 30 * 16 + 2 one byte wide
 
