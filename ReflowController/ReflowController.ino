@@ -30,10 +30,6 @@
 
 String ver = "base2.7_v0.2"; // bump minor version number on small changes, major on large changes, eg when eeprom layout changes
 
-// ------------------- some declarations/prototypes for menu
-void updateDisplay(boolean fullUpdate=false);
-void cycleStart(void);
-
 #include "temperature.h"
 temperatureSensorClass therm0;
 temperatureSensorClass therm1;
@@ -81,9 +77,16 @@ boolean stateChanged = false;
 #include <menuIO/chainStream.h>
 using namespace Menu;
 
-boolean menuSuspended=true;
-LiquidCrystal lcd(LCD_RS, LCD_ENABLE, LCD_D0, LCD_D1, LCD_D2, LCD_D3);
 
+// ------------------- some declarations/prototypes for menu
+void updateDisplay(boolean fullUpdate=false);
+void cycleStart(void);
+void changeProfile(eventMask e);
+void saveProfile(eventMask e);
+
+boolean menuSuspended=true;
+//config menuOptions('>','-',false,false,defaultNavCodes,true);
+LiquidCrystal lcd(LCD_RS, LCD_ENABLE, LCD_D0, LCD_D1, LCD_D2, LCD_D3);
 
 encoderIn<ENCODER_A_PIN, ENCODER_B_PIN> encoder;                      //simple quad encoder driver
 encoderInStream<ENCODER_A_PIN, ENCODER_B_PIN> encStream(encoder, 4);  //simple quad encoder fake Stream
@@ -92,6 +95,10 @@ encoderInStream<ENCODER_A_PIN, ENCODER_B_PIN> encStream(encoder, 4);  //simple q
 keyMap encBtn_map[] = {{ -ENCODER_BUTTON_PIN, options->getCmdChar(enterCmd)}}; //negative pin numbers use internal pull-up, this is on when low
 keyIn<1> encButton(encBtn_map);         //1 is the number of keys
 
+
+//todo: use instead disabling the start cycle menu: https://github.com/neu-rah/ArduinoMenu/issues/15
+//mainMenu.data[2]->text="Some new text";//change third option text
+//mainMenu.redraw(lcd,allIn);
 
 #if ENABLE_SERIAL_MENU > 0
   //input from the encoder + encoder button + serial
@@ -106,15 +113,15 @@ keyIn<1> encButton(encBtn_map);         //1 is the number of keys
 
 // ----------- MENU setup
 MENU(menuEditProfile, "Edit current Profile", doNothing, noEvent, noStyle
-     , EXIT(" ^..")
-     , FIELD(activeProfile.rampUpRate,    "Ramp up rate",    "°C/s", 0.1,    5, 0.5, 0.1,  doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.soakTemp,      "Soak temp",       "°C",   50,   180,   5, 1,    doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.soakDuration,  "Soak time",       "s",    10,   300,   5, 1,    doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.peakTemp,      "Peak temp",       "°C",   100,  300,   5, 1,    doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.peakDuration,  "Peak time",       "s",    5,    120,   5, 1,    doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.rampDownRate,  "Ramp down rate",  "°C/s", 0.1,   10, 0.5, 0.1,  doNothing, noEvent, noStyle)
+     , OP(" ^..&save", saveProfile, enterEvent )
+     , FIELD(activeProfile.rampUpRate,    "  Up rate",     "C/s", 0.1,      5,   0.1, 0,  doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.soakTemp,      "Soak temp",       "C",    50,    180,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.soakDuration,  "Soak time",       "s",    10,    300,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.peakTemp,      "Peak temp",       "C",   100,    300,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.peakDuration,  "Peak time",       "s",     5,    120,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.rampDownRate,  "Down rate",     "C/s", 0.1,       10, 0.1, 0,  doNothing, noEvent, noStyle)
     );
-
+/*
 MENU(menuSettings, "Settings", doNothing, noEvent, noStyle
      , EXIT(" ^-")
      , FIELD(heaterKp, "Heater kP", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
@@ -137,22 +144,17 @@ MENU(menuFactoryReset, "Factory Reset", doNothing, noEvent, noStyle
      , EXIT("No")
      , OP("Yes", doNothing, anyEvent)
     );
-
-MENU(menuAbortCycle, "abortCycle", doNothing, noEvent, noStyle
-     , EXIT(" ^- return")
-     , EXIT("No")
-     , OP("Yes", doNothing, anyEvent)
-    );
+*/
 
 MENU(mainMenu, "Main menu", doNothing, noEvent, noStyle
      , EXIT(" ^-Status Screen")
      , OP("Start Cycle", cycleStart, enterEvent )
-     , FIELD(profileNumber,"Active Profile","",0,NUMBER_OF_STORED_PROFILES-1,1,1,doNothing,noEvent,noStyle)
+     , FIELD(profileNumber,"Active Profile","",0,NUMBER_OF_STORED_PROFILES-1,1,0,changeProfile,exitEvent,noStyle)
      , SUBMENU(menuEditProfile)
      /*, OP("Save Profile", showEvent, enterEvent )*/
-     , SUBMENU(menuSettings)
+/*     , SUBMENU(menuSettings)
      , SUBMENU(menuManualMode)
-     , SUBMENU(menuFactoryReset)
+     , SUBMENU(menuFactoryReset)*/
     );
 
 #define MAX_DEPTH 2
@@ -162,7 +164,6 @@ MENU_OUTPUTS(out, MAX_DEPTH
             );
             
 NAVROOT(nav, mainMenu, MAX_DEPTH, in, out);     //the navigation root object
-//NAVROOT(nav2, menuAbortCycle, MAX_DEPTH, in, out);     //the navigation root object
 
 result idle(menuOut& o, idleEvent e) {
   switch (e) {
@@ -369,6 +370,7 @@ void setup() {
   Serial.println(F("Reflow Controller starting...")); Serial.flush();
 
   // ---------------- Setup menu
+  //options=&menuOptions;
   encoder.begin();
   lcd.begin(LCD_COLS, LCD_ROWS);
   nav.idleTask = idle;            //point a function to be used when menu is suspended
@@ -388,13 +390,11 @@ void setup() {
   lcd.clear();
 
   //detect first-run
-  if (firstRun()) {
+  if (firstRun())
     factoryReset();
-    loadParameters(0);
-  } else {
-    loadLastUsedProfile();
-  }
-
+   
+  loadLastUsedProfile();
+  
   //init temp-measurement and set averaging filter to first measured value
   therm0.setup(TEMP0_ADC);
   therm1.setup(TEMP1_ADC);
@@ -609,7 +609,6 @@ void loop() {
 
 }
 
-
 //start a cycle
 void cycleStart() {
 
@@ -627,50 +626,12 @@ void cycleStart() {
   nav.idleOn(idle);
 }
 
-void saveProfile(unsigned int targetProfile) {
-  profileNumber = targetProfile;
-  lcd.clear();
-  lcd.print("Saving profile ");
-  lcd.print(profileNumber);
-
+void changeProfile(eventMask e) {
+  //called after menu has set the new profileNumber... time to load the values
+  //Serial.println("Loading Profile");
+  
 #ifdef DEBUG
-
   Serial.println("Check parameters:");
-  Serial.print("idleTemp ");
-  Serial.println(idleTemp);
-  Serial.print("ramp Up rate ");
-  Serial.println(activeProfile.rampUpRate);
-  Serial.print("soakTemp ");
-  Serial.println(activeProfile.soakTemp);
-  Serial.print("soakDuration ");
-  Serial.println(activeProfile.soakDuration);
-  Serial.print("peakTemp ");
-  Serial.println(activeProfile.peakTemp);
-  Serial.print("peakDuration ");
-  Serial.println(activeProfile.peakDuration);
-  Serial.print("rampDownRate ");
-  Serial.println(activeProfile.rampDownRate);
-  Serial.println("About to save parameters");
-#endif
-
-  saveParameters(profileNumber); // profileNumber is modified by the menu code directly, this method is called by a menu action
-
-  delay(500);
-}
-
-void loadProfile(uint8_t targetProfile) {
-  // We may be able to do-away with profileNumber entirely now the selection is done in-function.
-  profileNumber = targetProfile;
-  lcd.clear();
-  lcd.print("Loading profile ");
-  lcd.print(profileNumber);
-  saveLastUsedProfile();
-
-#ifdef DEBUG
-
-  Serial.println("Check parameters:");
-  Serial.print("idleTemp ");
-  Serial.println(idleTemp);
   Serial.print("ramp Up rate ");
   Serial.println(activeProfile.rampUpRate);
   Serial.print("soakTemp ");
@@ -689,10 +650,7 @@ void loadProfile(uint8_t targetProfile) {
   loadParameters(profileNumber);
 
 #ifdef DEBUG
-
   Serial.println("Check parameters:");
-  Serial.print("idleTemp ");
-  Serial.println(idleTemp);
   Serial.print("ramp Up rate ");
   Serial.println(activeProfile.rampUpRate);
   Serial.print("soakTemp ");
@@ -707,36 +665,6 @@ void loadProfile(uint8_t targetProfile) {
   Serial.println(activeProfile.rampDownRate);
   Serial.println("after loading parameters");
 #endif
-
-  delay(500);
-}
-
-
-void saveParameters(uint8_t profile) {
-
-  uint16_t offset = 0;
-  offset = profile * AMOUNT_EEPROM_PER_PROFILE;
-
-
-  EEPROM.write(offset++, lowByte(activeProfile.soakTemp));
-  EEPROM.write(offset++, highByte(activeProfile.soakTemp));
-
-  EEPROM.write(offset++, lowByte(activeProfile.soakDuration));
-  EEPROM.write(offset++, highByte(activeProfile.soakDuration));
-
-  EEPROM.write(offset++, lowByte(activeProfile.peakTemp));
-  EEPROM.write(offset++, highByte(activeProfile.peakTemp));
-
-  EEPROM.write(offset++, lowByte(activeProfile.peakDuration));
-  EEPROM.write(offset++, highByte(activeProfile.peakDuration));
-
-  int temp = activeProfile.rampUpRate * 10;
-  EEPROM.write(offset++, (temp & 255));
-  EEPROM.write(offset++, (temp >> 8) & 255);
-
-  temp = activeProfile.rampDownRate * 10;
-  EEPROM.write(offset++, (temp & 255));
-  EEPROM.write(offset++, (temp >> 8) & 255);
 
 }
 
@@ -765,6 +693,65 @@ void loadParameters(uint8_t profile) {
   activeProfile.rampDownRate = ((double)temp / 10);
 
 }
+
+
+void saveProfile(eventMask e) {
+  //Serial.println(e);
+
+  //leave menu
+  nav.doNav(escCmd);
+
+  saveLastUsedProfile();
+  
+  //Serial.println("Saving Profile");
+#ifdef DEBUG
+  Serial.println("Check parameters:");
+  Serial.print("ramp Up rate ");
+  Serial.println(activeProfile.rampUpRate);
+  Serial.print("soakTemp ");
+  Serial.println(activeProfile.soakTemp);
+  Serial.print("soakDuration ");
+  Serial.println(activeProfile.soakDuration);
+  Serial.print("peakTemp ");
+  Serial.println(activeProfile.peakTemp);
+  Serial.print("peakDuration ");
+  Serial.println(activeProfile.peakDuration);
+  Serial.print("rampDownRate ");
+  Serial.println(activeProfile.rampDownRate);
+  Serial.println("About to save parameters");
+#endif
+
+  saveParameters(profileNumber);
+  return proceed;
+}
+
+void saveParameters(uint8_t profile) {
+  uint16_t offset = 0;
+  offset = profile * AMOUNT_EEPROM_PER_PROFILE;
+
+
+  EEPROM.write(offset++, lowByte(activeProfile.soakTemp));
+  EEPROM.write(offset++, highByte(activeProfile.soakTemp));
+
+  EEPROM.write(offset++, lowByte(activeProfile.soakDuration));
+  EEPROM.write(offset++, highByte(activeProfile.soakDuration));
+
+  EEPROM.write(offset++, lowByte(activeProfile.peakTemp));
+  EEPROM.write(offset++, highByte(activeProfile.peakTemp));
+
+  EEPROM.write(offset++, lowByte(activeProfile.peakDuration));
+  EEPROM.write(offset++, highByte(activeProfile.peakDuration));
+
+  int temp = activeProfile.rampUpRate * 10;
+  EEPROM.write(offset++, (temp & 255));
+  EEPROM.write(offset++, (temp >> 8) & 255);
+
+  temp = activeProfile.rampDownRate * 10;
+  EEPROM.write(offset++, (temp & 255));
+  EEPROM.write(offset++, (temp >> 8) & 255);
+
+}
+
 
 
 boolean firstRun() {
