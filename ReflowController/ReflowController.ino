@@ -52,7 +52,7 @@ uint8_t profileNumber = 0;
 double controlSetpoint, controlInput, controlOutput;
 
 //Define the PID tuning parameters
-double   heaterKp = HEATER_Kp,   heaterKi = HEATER_Ki,   heaterKd = HEATER_Kd;
+double   heaterKp,   heaterKi,   heaterKd;
 
 
 // state machine bits
@@ -83,6 +83,7 @@ void updateDisplay(boolean fullUpdate=false);
 void cycleStart(void);
 void changeProfile(eventMask e);
 void saveProfile(eventMask e);
+void saveSettings();
 
 boolean menuSuspended=true;
 //config menuOptions('>','-',false,false,defaultNavCodes,true);
@@ -112,25 +113,25 @@ keyIn<1> encButton(encBtn_map);         //1 is the number of keys
 
 
 // ----------- MENU setup
-MENU(menuEditProfile, "Edit current Profile", doNothing, noEvent, noStyle
-     , OP(" ^..&save", saveProfile, enterEvent )
+MENU(menuEditProfile, "Edit Profile", doNothing, noEvent, noStyle
+     , OP(" ^.. & save", saveProfile, enterEvent )
      , FIELD(activeProfile.rampUpRate,    "  Up rate",     "C/s", 0.1,      5,   0.1, 0,  doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.soakTemp,      "Soak temp",       "C",    50,    180,   5, 1,    doNothing, noEvent, noStyle)
+ /*    , FIELD(activeProfile.soakTemp,      "Soak temp",       "C",    50,    180,   5, 1,    doNothing, noEvent, noStyle)
      , FIELD(activeProfile.soakDuration,  "Soak time",       "s",    10,    300,   5, 1,    doNothing, noEvent, noStyle)
      , FIELD(activeProfile.peakTemp,      "Peak temp",       "C",   100,    300,   5, 1,    doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.peakDuration,  "Peak time",       "s",     5,    120,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.peakDuration,  "Peak time",       "s",     5,    120,   5, 1,    doNothing, noEvent, noStyle)*/
      , FIELD(activeProfile.rampDownRate,  "Down rate",     "C/s", 0.1,       10, 0.1, 0,  doNothing, noEvent, noStyle)
     );
-/*
+
 MENU(menuSettings, "Settings", doNothing, noEvent, noStyle
-     , EXIT(" ^-")
+     , OP(" ^.. & save", saveSettings, enterEvent )
      , FIELD(heaterKp, "Heater kP", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
      , FIELD(heaterKi, "Heater kI", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
      , FIELD(heaterKd, "Heater kD", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
      , OP("AutoTune", doNothing, enterEvent)
      , OP("Buzzer On/Off", doNothing, enterEvent)
     );
-
+/*
 MENU(menuManualMode, "Manual Control", doNothing, anyEvent, noStyle
      , EXIT(" ^-")
      , OP("All Off", doNothing, enterEvent )
@@ -151,9 +152,8 @@ MENU(mainMenu, "Main menu", doNothing, noEvent, noStyle
      , OP("Start Cycle", cycleStart, enterEvent )
      , FIELD(profileNumber,"Active Profile","",0,NUMBER_OF_STORED_PROFILES-1,1,0,changeProfile,exitEvent,noStyle)
      , SUBMENU(menuEditProfile)
-     /*, OP("Save Profile", showEvent, enterEvent )*/
-/*     , SUBMENU(menuSettings)
-     , SUBMENU(menuManualMode)
+     , SUBMENU(menuSettings)
+/*     , SUBMENU(menuManualMode)
      , SUBMENU(menuFactoryReset)*/
     );
 
@@ -394,6 +394,7 @@ void setup() {
     factoryReset();
    
   loadLastUsedProfile();
+  loadSettings();
   
   //init temp-measurement and set averaging filter to first measured value
   therm0.setup(TEMP0_ADC);
@@ -752,7 +753,43 @@ void saveParameters(uint8_t profile) {
 
 }
 
+void loadSettings() {
+  uint16_t offset = offsetSettingsNum;
+  
+  int temp = EEPROM.read(offset++);
+  temp |= EEPROM.read(offset++) << 8;
+  heaterKp = ((double)temp / 100);
+  
+  temp = EEPROM.read(offset++);
+  temp |= EEPROM.read(offset++) << 8;
+  heaterKi = ((double)temp / 100);
+  
+  temp = EEPROM.read(offset++);
+  temp |= EEPROM.read(offset++) << 8;
+  heaterKd = ((double)temp / 100);
+  
+}
 
+void saveSettings() {
+  uint16_t offset = offsetSettingsNum;
+
+  //leave menu
+  nav.doNav(escCmd);
+  
+  int temp = heaterKp * 100;
+  EEPROM.write(offset++, (temp & 255));
+  EEPROM.write(offset++, (temp >> 8) & 255);
+  
+  temp = heaterKi * 100;
+  EEPROM.write(offset++, (temp & 255));
+  EEPROM.write(offset++, (temp >> 8) & 255);
+  
+  temp = heaterKd * 100;
+  EEPROM.write(offset++, (temp & 255));
+  EEPROM.write(offset++, (temp >> 8) & 255);
+  
+  
+}
 
 boolean firstRun() {
   // check the the space of the first profile. if all bytes are 255, it's the very first run
@@ -780,6 +817,12 @@ void factoryReset() {
   for (uint8_t i = 0; i < NUMBER_OF_STORED_PROFILES; i++) {
     saveParameters(i);
   }
+
+  heaterKp=HEATER_Kp;
+  heaterKi=HEATER_Ki;
+  heaterKd=HEATER_Kd;
+  saveSettings();
+  
   //fanAssistSpeed = FAN_DEFAULT_SPEED;
   //saveFanSpeed();
   profileNumber = 0;

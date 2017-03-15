@@ -57,6 +57,7 @@
 #define NUMBER_OF_STORED_PROFILES 10
 // don't change the following defines
 #define AMOUNT_EEPROM_PER_PROFILE 16
-#define offsetFanSpeed    NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+1 // 30 * 16 + 1 one byte wide
-#define offsetProfileNum  NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+2 // 30 * 16 + 2 one byte wide
+#define offsetFanSpeed      NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+ 1 // one byte wide
+#define offsetProfileNum    NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+ 2 // one byte wide
+#define offsetSettingsNum   NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+ 3 // multiple bytes wide
 
