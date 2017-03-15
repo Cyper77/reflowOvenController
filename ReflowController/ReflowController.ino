@@ -147,7 +147,7 @@ MENU(menuAbortCycle, "abortCycle", doNothing, noEvent, noStyle
 MENU(mainMenu, "Main menu", doNothing, noEvent, noStyle
      , EXIT(" ^-Status Screen")
      , OP("Start Cycle", cycleStart, enterEvent )
-     , OP("Active Profile", doNothing, enterEvent )
+     , FIELD(profileNumber,"Active Profile","",0,NUMBER_OF_STORED_PROFILES-1,1,1,doNothing,noEvent,noStyle)
      , SUBMENU(menuEditProfile)
      /*, OP("Save Profile", showEvent, enterEvent )*/
      , SUBMENU(menuSettings)
