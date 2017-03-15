@@ -160,7 +160,9 @@ MENU_OUTPUTS(out, MAX_DEPTH
              , LIQUIDCRYSTAL_OUT(lcd, {0, 0, LCD_COLS, LCD_ROWS})
              , NONE
             );
+            
 NAVROOT(nav, mainMenu, MAX_DEPTH, in, out);     //the navigation root object
+//NAVROOT(nav2, menuAbortCycle, MAX_DEPTH, in, out);     //the navigation root object
 
 result idle(menuOut& o, idleEvent e) {
   switch (e) {
@@ -172,16 +174,23 @@ result idle(menuOut& o, idleEvent e) {
       /* suspended... */
       menuSuspended=true;
       updateDisplay(true);
+      
     break;
     
     case idleEnd:
       /* resuming menu */
       menuSuspended=false;
       if(currentState!=sIDLE) {
-        Serial.print("call abort menu");
-        nav.doNav(navCmd(idxCmd,1));
+        // if resuming main-menu in state!=idle, disable the start-option
+        mainMenu[1].disable();  //disable item no. 2 in mainMenu
+        //nav.doNav(navCmd(idxCmd,0));
+        //nav.idleOn(idle);
+        //menuSuspended=true;
+        //updateDisplay(true);
+
       } else {
-        Serial.print("go on");
+        //enable start-cycle item again
+        mainMenu[1].enable();
       }
     break;
   }
@@ -363,7 +372,7 @@ void setup() {
   encoder.begin();
   lcd.begin(LCD_COLS, LCD_ROWS);
   nav.idleTask = idle;            //point a function to be used when menu is suspended
-  /*mainMenu[1].enabled=disabledStatus; */
+  //nav.sleepTask = idle;
   nav.showTitle = false;
   byte deltaChar[8] = {
     0b00000,
@@ -461,6 +470,11 @@ void loop() {
     switch (currentState) {
       case sIDLE:
         //Serial.println("Idle");
+        if (stateChanged) {
+          mainMenu[1].enable();
+          stateChanged=false;
+        }
+        
         break;
 
       case sRAMPTOSOAK:
@@ -836,4 +850,4 @@ void sendSerialUpdate() {
     Serial.println(rampRate);
   }
 }
-  
+  
