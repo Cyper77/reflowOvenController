@@ -13,27 +13,26 @@
 #define PROFILE_DEFAULT_rampDownRate  3.0;
 #define FAN_DEFAULT_SPEED 33
 
-#define idleTemp        50 // the temperature at which to consider the oven safe to leave to cool naturally
+#define IDLETEMP        50 // the temperature at which to consider the oven safe to leave to cool naturally
 
 
 // -------------------- Control
-#define WindowSize  100    //in ms
+#define MODULATION_WINDOWSIZE  100    //in ms
 #define SIZE_OF_AVG 16    // over how many values the temperature is averaged
 
 #define HEATER_Kp   4.00
 #define HEATER_Ki   0.05
 #define HEATER_Kd   2.00
-#define FAN_Kp      1.00
-#define FAN_Ki      0.03
-#define FAN_Kd      10.0
 
 // -------------------- Actuators, Heater, Fans
-#define HEATING_PIN     6
-#define FAN_PIN         5
+#define HEATING_PIN     6		//SSR1
+#define FAN_PIN         5		//SSR2
+#define BUZZER_PIN		7
+#define BUZZER_DEFAULT	1		//1 on 0 off
 
 // -------------------- Sensors, Buttons, Encoders
-#define TEMP0_ADC 0
-#define TEMP1_ADC 1
+#define TEMP0_ADC 0			//Analog ADC0
+#define TEMP1_ADC 1			//Analog ADC1
 
 #define STOP_SWITCH_PIN     0
 #define ENCODER_A_PIN       2
@@ -57,7 +56,7 @@
 #define NUMBER_OF_STORED_PROFILES 10
 // don't change the following defines
 #define AMOUNT_EEPROM_PER_PROFILE 16
-#define offsetFanSpeed      NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+ 1 // one byte wide
-#define offsetProfileNum    NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+ 2 // one byte wide
-#define offsetSettingsNum   NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+ 3 // multiple bytes wide
+#define EEPROM_OFFSET_FAN_SPEED			NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+ 1 // one byte wide
+#define EEPROM_OFFSET_PROFILE_NUMBER    NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+ 2 // one byte wide
+#define EEPROM_OFFSET_SETTINGS			NUMBER_OF_STORED_PROFILES*AMOUNT_EEPROM_PER_PROFILE+ 3 // multiple bytes wide
 

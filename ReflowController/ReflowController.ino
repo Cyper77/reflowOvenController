@@ -1,28 +1,25 @@
 /*
-  ESTechnical Reflow Oven Controller
+  Reflow Oven Controller
 
   Ed Simmons 2012-2015
   Michael Groene 2017
 
-  bases on v2.7 (checkout XXX) of ESTechnical
+  based on v2.7 (checkout XXX) of ESTechnical
 
   Changes
   -------
-  v0.2
-    - Optimized for Arduino Uno
+  v0.3
+    - Suited for Arduino Mega
     - UI via Encoder and Pushbutton
     - use FilterAverage-Lib
     - Use 100k NTC as temperature sensor (standard in 3D-printing)
     - Safety-Check for illegal temperature reading
     - RampRate math fixed
+    - BEEPER
   BUGS/TODOS:
     - PID-Autotune (TODO)
-    - BEEPER (TODO)
     - adapt output and switching freq to the zero crossing freq (100Hz), http://playground.arduino.cc/Code/PIDLibraryRelayOutputExample
 
-  http://www.estechnical.co.uk
-  http://www.estechnical.co.uk/reflow-controllers/t962a-reflow-oven-controller-upgrade
-  http://www.estechnical.co.uk/reflow-ovens/estechnical-reflow-oven
 */
 
 #include <Arduino.h>
@@ -54,6 +51,7 @@ double controlSetpoint, controlInput, controlOutput;
 //Define the PID tuning parameters
 double   heaterKp,   heaterKi,   heaterKd;
 
+boolean buzzerOn=BUZZER_DEFAULT;
 
 // state machine bits
 enum state {
@@ -116,10 +114,10 @@ keyIn<1> encButton(encBtn_map);         //1 is the number of keys
 MENU(menuEditProfile, "Edit Profile", doNothing, noEvent, noStyle
      , OP(" ^.. & save", saveProfile, enterEvent )
      , FIELD(activeProfile.rampUpRate,    "  Up rate",     "C/s", 0.1,      5,   0.1, 0,  doNothing, noEvent, noStyle)
- /*    , FIELD(activeProfile.soakTemp,      "Soak temp",       "C",    50,    180,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.soakTemp,      "Soak temp",       "C",    50,    180,   5, 1,    doNothing, noEvent, noStyle)
      , FIELD(activeProfile.soakDuration,  "Soak time",       "s",    10,    300,   5, 1,    doNothing, noEvent, noStyle)
      , FIELD(activeProfile.peakTemp,      "Peak temp",       "C",   100,    300,   5, 1,    doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.peakDuration,  "Peak time",       "s",     5,    120,   5, 1,    doNothing, noEvent, noStyle)*/
+     , FIELD(activeProfile.peakDuration,  "Peak time",       "s",     5,    120,   5, 1,    doNothing, noEvent, noStyle)
      , FIELD(activeProfile.rampDownRate,  "Down rate",     "C/s", 0.1,       10, 0.1, 0,  doNothing, noEvent, noStyle)
     );
 
@@ -131,7 +129,7 @@ MENU(menuSettings, "Settings", doNothing, noEvent, noStyle
      , OP("AutoTune", doNothing, enterEvent)
      , OP("Buzzer On/Off", doNothing, enterEvent)
     );
-/*
+
 MENU(menuManualMode, "Manual Control", doNothing, anyEvent, noStyle
      , EXIT(" ^-")
      , OP("All Off", doNothing, enterEvent )
@@ -145,7 +143,7 @@ MENU(menuFactoryReset, "Factory Reset", doNothing, noEvent, noStyle
      , EXIT("No")
      , OP("Yes", doNothing, anyEvent)
     );
-*/
+
 
 MENU(mainMenu, "Main menu", doNothing, noEvent, noStyle
      , EXIT(" ^-Status Screen")
@@ -153,8 +151,8 @@ MENU(mainMenu, "Main menu", doNothing, noEvent, noStyle
      , FIELD(profileNumber,"Active Profile","",0,NUMBER_OF_STORED_PROFILES-1,1,0,changeProfile,exitEvent,noStyle)
      , SUBMENU(menuEditProfile)
      , SUBMENU(menuSettings)
-/*     , SUBMENU(menuManualMode)
-     , SUBMENU(menuFactoryReset)*/
+     , SUBMENU(menuManualMode)
+     , SUBMENU(menuFactoryReset)
     );
 
 #define MAX_DEPTH 2
@@ -216,7 +214,10 @@ void abortWithError(uint8_t error) {
   // set outputs off for safety.
   digitalWrite(HEATING_PIN, LOW);
   //digitalWrite(FAN_PIN, LOW);
-
+  
+  if(buzzerOn)
+	  tone(BUZZER_PIN,1760,1000);  //Error Beep
+  
   lcd.clear();
 
   switch (error) {
@@ -401,7 +402,7 @@ void setup() {
   therm1.setup(TEMP1_ADC);
 
   // ---------------- PID setup
-  PID.SetOutputLimits(0, WindowSize);
+  PID.SetOutputLimits(0, MODULATION_WINDOWSIZE);
   PID.SetSampleTime(100);
 
   if (therm0.getStatus() != 0) {
@@ -481,6 +482,8 @@ void loop() {
       case sRAMPTOSOAK:
         //Serial.println("ramp");
         if (stateChanged) {
+    		  if(buzzerOn)
+    		    tone(BUZZER_PIN,1760,50);
           PID.SetMode(MANUAL);
           controlOutput = 80;
           PID.SetControllerDirection(DIRECT);
@@ -499,6 +502,8 @@ void loop() {
       case sSOAK:
         if (stateChanged) {
           controlSetpoint = activeProfile.soakTemp;
+    		  if(buzzerOn)
+    		    tone(BUZZER_PIN,1760,50);
           stateChanged = false;
         }
         if (millis() - stateChangedTime >= (unsigned long) activeProfile.soakDuration * 1000) {
@@ -508,6 +513,8 @@ void loop() {
 
       case sRAMPTOPEAK:
         if (stateChanged) {
+    		  if(buzzerOn)
+    			  tone(BUZZER_PIN,1760,50);
           stateChanged = false;
         }
 
@@ -522,6 +529,8 @@ void loop() {
       case sPEAK:
         if (stateChanged) {
           controlSetpoint = activeProfile.peakTemp;
+    		  if(buzzerOn)
+    		    tone(BUZZER_PIN,1760,50);
           stateChanged = false;
         }
 
@@ -533,13 +542,14 @@ void loop() {
       case sRAMPDOWM:
         if (stateChanged) {
           stateChanged = false;
-          
+		      if(buzzerOn)
+            tone(BUZZER_PIN,1760,250);
           controlSetpoint = activeProfile.peakTemp - 15; // get it all going with a bit of a kick! v sluggish here otherwise, too hot too long
         }
 
         controlSetpoint -= (activeProfile.rampDownRate / 10);
 
-        if (controlSetpoint <= idleTemp) {
+        if (controlSetpoint <= IDLETEMP) {
           currentState = sCOOLDOWN;
         }
         break;
@@ -547,12 +557,15 @@ void loop() {
       case sCOOLDOWN:
         if (stateChanged) {
           stateChanged = false;
-          
-          controlSetpoint = idleTemp;
+		      if(buzzerOn)
+            tone(BUZZER_PIN,1760,50);
+          controlSetpoint = IDLETEMP;
         }
-        if (controlInput < (idleTemp + 5)) {
+        if (controlInput < (IDLETEMP + 5)) {
           currentState = sIDLE;
           PID.SetMode(MANUAL);
+    		  if(buzzerOn)
+    		    tone(BUZZER_PIN,1760,100);
           controlOutput = 0;
         }
         break;
@@ -584,9 +597,9 @@ void loop() {
     //fanValue = fanAssistSpeed;
   }
 
-  if ( (millis() - windowStartTime) > WindowSize) {
+  if ( (millis() - windowStartTime) > MODULATION_WINDOWSIZE) {
     //time to shift the Relay Window
-    windowStartTime += WindowSize;
+    windowStartTime += MODULATION_WINDOWSIZE;
   }
 
   if ( heaterValue < (millis() - windowStartTime) ) {
@@ -754,7 +767,7 @@ void saveParameters(uint8_t profile) {
 }
 
 void loadSettings() {
-  uint16_t offset = offsetSettingsNum;
+  uint16_t offset = EEPROM_OFFSET_SETTINGS;
   
   int temp = EEPROM.read(offset++);
   temp |= EEPROM.read(offset++) << 8;
@@ -768,10 +781,11 @@ void loadSettings() {
   temp |= EEPROM.read(offset++) << 8;
   heaterKd = ((double)temp / 100);
   
+  buzzerOn = EEPROM.read(offset++);
 }
 
 void saveSettings() {
-  uint16_t offset = offsetSettingsNum;
+  uint16_t offset = EEPROM_OFFSET_SETTINGS;
 
   //leave menu
   nav.doNav(escCmd);
@@ -788,6 +802,7 @@ void saveSettings() {
   EEPROM.write(offset++, (temp & 255));
   EEPROM.write(offset++, (temp >> 8) & 255);
   
+  EEPROM.write(offset++,buzzerOn);
   
 }
 
@@ -821,6 +836,7 @@ void factoryReset() {
   heaterKp=HEATER_Kp;
   heaterKi=HEATER_Ki;
   heaterKd=HEATER_Kd;
+  buzzerOn=BUZZER_DEFAULT;
   saveSettings();
   
   //fanAssistSpeed = FAN_DEFAULT_SPEED;
@@ -832,13 +848,13 @@ void factoryReset() {
 }
 
 void saveLastUsedProfile() {
-  EEPROM.write(offsetProfileNum, profileNumber);
+  EEPROM.write(EEPROM_OFFSET_PROFILE_NUMBER, profileNumber);
   //Serial.print("Saving active profile number :");
   //Serial.println(temp);
 }
 
 void loadLastUsedProfile() {
-  profileNumber = EEPROM.read(offsetProfileNum);
+  profileNumber = EEPROM.read(EEPROM_OFFSET_PROFILE_NUMBER);
   //Serial.print("Loaded last used profile number :");
   //Serial.println(temp);
   loadParameters(profileNumber);
