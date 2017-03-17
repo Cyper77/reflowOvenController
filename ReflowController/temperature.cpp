@@ -13,17 +13,17 @@ void temperatureSensorClass::setup(uint8_t pin) {
   analogRead(this->pin);
 
   //init filter
-  this->oAverageFilter.setAverage(this->readTemperatureRaw());
+  this->oAverageFilter.setAverage(this->convertTemperature(this->readTemperatureRaw()));
   
 }
 
 
 void temperatureSensorClass::triggerTemperatureMeasurement() {
   //add new raw value to rolling average filter
-  this->oAverageFilter.AddToFloatAverage(this->readTemperatureRaw());
+  this->oAverageFilter.AddToFloatAverage(this->convertTemperature(this->readTemperatureRaw()));
 
   //calculate new averaged result and store in cache for further use in main program
-  this->temperature=this->convertTemperature(this->oAverageFilter.getAverage());
+  this->temperature=(this->oAverageFilter.getAverage());
   
 }
 
@@ -45,7 +45,8 @@ double temperatureSensorClass::getTemperatureCelsius() {
 }
 
 double temperatureSensorClass::getTemperatureRampPerDatastep() {
-  return (this->convertTemperature(this->oAverageFilter.getLeastAddedValue()) - this->convertTemperature(this->oAverageFilter.getOldestAddedValue()))/(SIZE_OF_AVG - 1);
+  //return (this->convertTemperature(this->oAverageFilter.getLeastAddedValue()) - this->convertTemperature(this->oAverageFilter.getOldestAddedValue()))/(SIZE_OF_AVG - 1);
+  return ((this->oAverageFilter.getSlope()));
 }
 
 double temperatureSensorClass::convertTemperature(uint16_t rawtemp) {

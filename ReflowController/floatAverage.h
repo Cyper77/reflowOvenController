@@ -17,12 +17,12 @@
 #endif
 
 // Datentyp, ueber den der gleitende Mittelwert berechnet werden soll.
-typedef uint16_t FloatAverage_t;
+typedef double FloatAverage_t;
 
 
 // Wird nur intern fuer die Durchschnittsberechnung benutzt.
 // Muss Zahlen fassen koennen, die SIZE_OF_AVG mal groesser als tFloatAvgType sind.
-typedef uint16_t TempSum_t;
+typedef double TempSum_t;
 
 
 class floatAverageClass {
@@ -41,6 +41,8 @@ class floatAverageClass {
 		
 		// gibt den ältesten, d.h. den als nächstes zu überschreibenden Wert des Arrays zurück
 		FloatAverage_t getOldestAddedValue();
+
+   double getSlope();
 		
 	private:
 		// Die Struktur, in der die Daten zwischengespeichert werden

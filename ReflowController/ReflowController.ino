@@ -19,7 +19,6 @@
   BUGS/TODOS:
     - PID-Autotune (TODO)
     - adapt output and switching freq to the zero crossing freq (100Hz), http://playground.arduino.cc/Code/PIDLibraryRelayOutputExample
-
 */
 
 #include <Arduino.h>

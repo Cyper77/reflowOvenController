@@ -51,5 +51,25 @@ FloatAverage_t floatAverageClass::getOldestAddedValue() {
 	return this->aData[this->IndexNextValue];
 }
 
+double floatAverageClass::getSlope() {
+  //https://de.wikipedia.org/wiki/Lineare_Regression#Berechnung_der_Regressionsgeraden
 
-
+  const double sumX=SIZE_OF_AVG*(SIZE_OF_AVG+1)/2;
+  const double sumXpow=( SIZE_OF_AVG*(SIZE_OF_AVG+1) * ( (2*SIZE_OF_AVG)+1 ) ) / 6;
+  FloatAverage_t sumXY=0;
+  FloatAverage_t sumY=0;
+  uint8_t nextDataIndex=this->IndexNextValue;
+  
+  for (uint8_t i = 0; i < SIZE_OF_AVG; ++i) {
+    sumXY+=i*this->aData[nextDataIndex];
+    sumY +=  this->aData[nextDataIndex];
+    
+    nextDataIndex++;
+    if(nextDataIndex==SIZE_OF_AVG)
+      nextDataIndex=0;
+  }
+  double zaehler = (SIZE_OF_AVG * sumXY)   - ( sumX*sumY );
+  double nenner  = (SIZE_OF_AVG * sumXpow) - ( sumX*sumX );
+  
+  return zaehler/nenner;
+}
