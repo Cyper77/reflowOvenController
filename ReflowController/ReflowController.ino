@@ -16,15 +16,16 @@
     - Safety-Check for illegal temperature reading
     - RampRate math fixed
     - BEEPER
+    - PID-Autotune
   BUGS/TODOS:
-    - PID-Autotune (TODO)
+
     - adapt output and switching freq to the zero crossing freq (100Hz), http://playground.arduino.cc/Code/PIDLibraryRelayOutputExample
 */
 
 #include <Arduino.h>
 #include "config.h"
 
-String ver = "base2.7_v0.2"; // bump minor version number on small changes, major on large changes, eg when eeprom layout changes
+String ver = "base2.7_v0.3"; // bump minor version number on small changes, major on large changes, eg when eeprom layout changes
 
 #include "temperature.h"
 temperatureSensorClass therm0;
@@ -43,10 +44,16 @@ uint8_t profileNumber = 0;
 
 #include <EEPROM.h>
 #include <PID_v1.h>
+#include <PID_AutoTune_v0.h>
 
 // PID variables
 double controlSetpoint, controlInput, controlOutput;
-
+struct autotuneParameter {
+  uint16_t targetTemperature=220;
+  uint16_t startOutput=80;
+  double noiseBand=1;
+  double tuneStep=1;
+} autotune;
 //Define the PID tuning parameters
 double   heaterKp,   heaterKi,   heaterKd;
 
@@ -60,7 +67,8 @@ enum state {
   sRAMPTOPEAK,
   sPEAK,
   sRAMPDOWM,
-  sCOOLDOWN
+  sCOOLDOWN,
+  sAUTOTUNE,
 } currentState = sIDLE, lastState = sIDLE;
 boolean stateChanged = false;
 
@@ -78,6 +86,7 @@ using namespace Menu;
 // ------------------- some declarations/prototypes for menu
 void updateDisplay(boolean fullUpdate=false);
 void cycleStart(void);
+void autotuneStart(void);
 void changeProfile(eventMask e);
 void saveProfile(eventMask e);
 void saveSettings();
@@ -125,7 +134,6 @@ MENU(menuSettings, "Settings", doNothing, noEvent, noStyle
      , FIELD(heaterKp, "Heater kP", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
      , FIELD(heaterKi, "Heater kI", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
      , FIELD(heaterKd, "Heater kD", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
-     , OP("AutoTune", doNothing, enterEvent)
      , OP("Buzzer On/Off", doNothing, enterEvent)
     );
 
@@ -135,6 +143,15 @@ MENU(menuManualMode, "Manual Control", doNothing, anyEvent, noStyle
      , OP("Set Temperature", doNothing, enterEvent)
      , OP("Set SSR1 Duty", doNothing, enterEvent)
      , OP("SSR2 On/Off", doNothing, enterEvent)
+    );
+
+MENU(menuAutotune, "PID Autotune", doNothing, anyEvent, noStyle
+     , EXIT(" ^-")
+     , FIELD(autotune.targetTemperature,    "Target Temp.",     "C", 0,      280,   5, 1,  doNothing, noEvent, noStyle)
+     , FIELD(autotune.startOutput,    "Start Output",     "%", 0,      100,   5, 1,  doNothing, noEvent, noStyle)
+     , FIELD(autotune.noiseBand,    "Noiseband",     "", 0.1,      10,   0.1, 0,  doNothing, noEvent, noStyle)
+     , FIELD(autotune.tuneStep,    "Tunestep",     "", 0.1,      100,   1, 0.1,  doNothing, noEvent, noStyle)
+     , OP("Start Autotune", autotuneStart, enterEvent)
     );
 
 MENU(menuFactoryReset, "Factory Reset", doNothing, noEvent, noStyle
@@ -151,6 +168,7 @@ MENU(mainMenu, "Main menu", doNothing, noEvent, noStyle
      , SUBMENU(menuEditProfile)
      , SUBMENU(menuSettings)
      , SUBMENU(menuManualMode)
+     , SUBMENU(menuAutotune)
      , SUBMENU(menuFactoryReset)
     );
 
@@ -201,6 +219,7 @@ unsigned long startTime, stateChangedTime = 0, lastUpdate = 0, lastDisplayUpdate
 
 //Specify the links and initial tuning parameters
 PID PID(&controlInput, &controlOutput, &controlSetpoint, heaterKp, heaterKi, heaterKd, DIRECT);
+PID_ATune aTune(&controlInput, &controlOutput);
 uint8_t heaterValue;
 
 
@@ -302,6 +321,9 @@ void displayState() {
     case sCOOLDOWN:
       displayPaddedString(("Cool Down"), 9);
       break;
+    case sAUTOTUNE:
+      displayPaddedString(("Autotune"), 9);
+      break;
   }
 }
 
@@ -364,7 +386,8 @@ void setup() {
 
   pinMode(HEATING_PIN, OUTPUT);
   //pinMode(FAN_PIN, OUTPUT);
-
+  pinMode(BUZZER_PIN, OUTPUT);
+  
   Serial.begin(SERIAL_BAUD);
   while (!Serial);
   Serial.println(F("Reflow Controller starting...")); Serial.flush();
@@ -568,6 +591,45 @@ void loop() {
           controlOutput = 0;
         }
         break;
+
+        case sAUTOTUNE:
+          if (stateChanged) {
+            stateChanged = false;
+
+            //init tuning
+            controlSetpoint = autotune.targetTemperature;
+            controlOutput=autotune.startOutput;
+            aTune.SetNoiseBand(autotune.noiseBand);
+            aTune.SetOutputStep(autotune.tuneStep);
+            aTune.SetLookbackSec((int)20);
+
+            PID.SetMode(AUTOMATIC);
+          }
+
+          
+          if (aTune.Runtime() != 0) {
+            //tuning finished
+            currentState = sCOOLDOWN;
+
+            heaterKp = aTune.GetKp();
+            heaterKi = aTune.GetKi();
+            heaterKd = aTune.GetKd();
+            PID.SetTunings(heaterKp,heaterKi,heaterKd);
+            saveSettings();
+
+            PID.SetMode(MANUAL);
+            
+            /*
+            tft.setCursor(40, 40);
+            tft.print("Kp: "); tft.print((uint32_t)(heaterPID.Kp * 100));
+            tft.setCursor(40, 52);
+            tft.print("Ki: "); tft.print((uint32_t)(heaterPID.Ki * 100));
+            tft.setCursor(40, 64);
+            tft.print("Kd: "); tft.print((uint32_t)(heaterPID.Kd * 100));
+            */
+          }
+
+        break;
     }
   }
 
@@ -579,7 +641,8 @@ void loop() {
   if (controlSetpoint > controlInput + 50) abortWithError(1); // if we're 50 degree cooler than setpoint, abort
   //if(Input > Setpoint + 50) abortWithError(2);// or 50 degrees hotter, also abort
 
-  PID.Compute();
+  if(currentState!=sAUTOTUNE)
+    PID.Compute();
 
   if (currentState == sIDLE) {
     //all off in idle mode
@@ -630,6 +693,22 @@ void cycleStart() {
   lcd.clear();
   lcd.print("Starting cycle ");
   lcd.print(profileNumber);
+  delay(1000);
+
+  //time the cycle started
+  startTime = millis();
+  
+  //suspend menu go to status screen
+  nav.idleOn(idle);
+}
+
+//start a cycle
+void autotuneStart() {
+
+  currentState = sAUTOTUNE;
+  
+  lcd.clear();
+  lcd.print("Starting Autotune");
   delay(1000);
 
   //time the cycle started
