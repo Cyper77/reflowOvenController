@@ -5,13 +5,13 @@
 #define ENABLE_SERIAL_MENU 0
 
 // -------------------- Profile
+// this is the default profile, special profiles see in profiles.h
 #define PROFILE_DEFAULT_soakTemp      130;
 #define PROFILE_DEFAULT_soakDuration  30;
 #define PROFILE_DEFAULT_peakTemp      220;
 #define PROFILE_DEFAULT_peakDuration  10;
 #define PROFILE_DEFAULT_rampUpRate    0.80;
 #define PROFILE_DEFAULT_rampDownRate  3.0;
-#define FAN_DEFAULT_SPEED 33
 
 #define IDLETEMP        50 // the temperature at which to consider the oven safe to leave to cool naturally
 

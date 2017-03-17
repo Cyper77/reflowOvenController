@@ -17,8 +17,8 @@
     - RampRate math fixed
     - BEEPER
     - PID-Autotune
+    - EEPROMex with Double, etc.
   BUGS/TODOS:
-
     - adapt output and switching freq to the zero crossing freq (100Hz), http://playground.arduino.cc/Code/PIDLibraryRelayOutputExample
 */
 
@@ -42,7 +42,7 @@ struct profileValues {
 } activeProfile;
 uint8_t profileNumber = 0;
 
-#include <EEPROM.h>
+#include <EEPROMex.h>
 #include <PID_v1.h>
 #include <PID_AutoTune_v0.h>
 
@@ -55,7 +55,12 @@ struct autotuneParameter {
   double tuneStep=1;
 } autotune;
 //Define the PID tuning parameters
-double   heaterKp,   heaterKi,   heaterKd;
+struct PIDparameter {
+	double P;
+	double I;
+	double D;
+} heaterPIDparameter;
+
 
 boolean buzzerOn=BUZZER_DEFAULT;
 
@@ -131,9 +136,9 @@ MENU(menuEditProfile, "Edit Profile", doNothing, noEvent, noStyle
 
 MENU(menuSettings, "Settings", doNothing, noEvent, noStyle
      , OP(" ^.. & save", saveSettings, enterEvent )
-     , FIELD(heaterKp, "Heater kP", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
-     , FIELD(heaterKi, "Heater kI", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
-     , FIELD(heaterKd, "Heater kD", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
+     , FIELD(heaterPIDparameter.P, "Heater kP", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
+     , FIELD(heaterPIDparameter.I, "Heater kI", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
+     , FIELD(heaterPIDparameter.D, "Heater kD", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
      , OP("Buzzer On/Off", doNothing, enterEvent)
     );
 
@@ -218,8 +223,8 @@ unsigned long windowStartTime;
 unsigned long startTime, stateChangedTime = 0, lastUpdate = 0, lastDisplayUpdate = 0, lastSerialOutput = 0; // a handful of timer variables
 
 //Specify the links and initial tuning parameters
-PID PID(&controlInput, &controlOutput, &controlSetpoint, heaterKp, heaterKi, heaterKd, DIRECT);
-PID_ATune aTune(&controlInput, &controlOutput);
+PID heaterPID(&controlInput, &controlOutput, &controlSetpoint, heaterPIDparameter.P, heaterPIDparameter.I, heaterPIDparameter.D, DIRECT);
+PID_ATune HeaterPIDautotune(&controlInput, &controlOutput);
 uint8_t heaterValue;
 
 
@@ -304,13 +309,13 @@ void displayState() {
       displayPaddedString(("Idle"), 9);
       break;
     case sRAMPTOSOAK:
-      displayPaddedString(("Ramp Up"), 9);
+      displayPaddedString(("Ramp Soak"), 9);
       break;
     case sSOAK:
       displayPaddedString(("Soak"), 9);
       break;
     case sRAMPTOPEAK:
-      displayPaddedString(("Ramp Up"), 9);
+      displayPaddedString(("Ramp Peak"), 9);
       break;
     case sPEAK:
       displayPaddedString(("Peak"), 9);
@@ -424,8 +429,8 @@ void setup() {
   therm1.setup(TEMP1_ADC);
 
   // ---------------- PID setup
-  PID.SetOutputLimits(0, MODULATION_WINDOWSIZE);
-  PID.SetSampleTime(100);
+  heaterPID.SetOutputLimits(0, MODULATION_WINDOWSIZE);
+  heaterPID.SetSampleTime(100);
 
   if (therm0.getStatus() != 0) {
     abortWithError(3);
@@ -486,6 +491,10 @@ void loop() {
       } else if (currentState != sIDLE) {
         currentState = sCOOLDOWN;
       }
+
+      //turn autotuner off if it was running
+      HeaterPIDautotune.Cancel();
+      
     }
     lastStopPinState = stopPin;
 
@@ -506,12 +515,12 @@ void loop() {
         if (stateChanged) {
     		  if(buzzerOn)
     		    tone(BUZZER_PIN,1760,50);
-          PID.SetMode(MANUAL);
+          heaterPID.SetMode(MANUAL);
           controlOutput = 80;
-          PID.SetControllerDirection(DIRECT);
-          PID.SetTunings(heaterKp, heaterKi, heaterKd);
+          heaterPID.SetControllerDirection(DIRECT);
+          heaterPID.SetTunings(heaterPIDparameter.P, heaterPIDparameter.I, heaterPIDparameter.D);
           controlSetpoint = therm0.getTemperatureCelsius();    //start at current measured temeprature in the moment of changing state
-          PID.SetMode(AUTOMATIC);
+          heaterPID.SetMode(AUTOMATIC);
           stateChanged = false;
         }
         controlSetpoint += (activeProfile.rampUpRate / 10); // target set ramp up rate
@@ -585,7 +594,7 @@ void loop() {
         }
         if (controlInput < (IDLETEMP + 5)) {
           currentState = sIDLE;
-          PID.SetMode(MANUAL);
+          heaterPID.SetMode(MANUAL);
     		  if(buzzerOn)
     		    tone(BUZZER_PIN,1760,100);
           controlOutput = 0;
@@ -599,25 +608,26 @@ void loop() {
             //init tuning
             controlSetpoint = autotune.targetTemperature;
             controlOutput=autotune.startOutput;
-            aTune.SetNoiseBand(autotune.noiseBand);
-            aTune.SetOutputStep(autotune.tuneStep);
-            aTune.SetLookbackSec((int)20);
-
-            PID.SetMode(AUTOMATIC);
+            HeaterPIDautotune.SetNoiseBand(autotune.noiseBand); //noise: how much noise to ignore. Try to make this as small as possible, while still preventing output chatter. 
+            HeaterPIDautotune.SetOutputStep(autotune.tuneStep);
+            HeaterPIDautotune.SetLookbackSec((int)20);  //seconds: integer. think about how far apart the peaks are. 1/4-1/2 of this distance is a good value
+            HeaterPIDautotune.SetControlType(1);        // 0: PI 1: PID
+            
+            heaterPID.SetMode(AUTOMATIC);
           }
 
           
-          if (aTune.Runtime() != 0) {
-            //tuning finished
+          if (HeaterPIDautotune.Runtime() != 0) {
+            //tuning finished: runtime returns 1
             currentState = sCOOLDOWN;
 
-            heaterKp = aTune.GetKp();
-            heaterKi = aTune.GetKi();
-            heaterKd = aTune.GetKd();
-            PID.SetTunings(heaterKp,heaterKi,heaterKd);
+            heaterPIDparameter.P = HeaterPIDautotune.GetKp();
+            heaterPIDparameter.I = HeaterPIDautotune.GetKi();
+            heaterPIDparameter.D = HeaterPIDautotune.GetKd();
+            heaterPID.SetTunings(heaterPIDparameter.P,heaterPIDparameter.I,heaterPIDparameter.D);
             saveSettings();
 
-            PID.SetMode(MANUAL);
+            heaterPID.SetMode(MANUAL);
             
             /*
             tft.setCursor(40, 40);
@@ -642,7 +652,7 @@ void loop() {
   //if(Input > Setpoint + 50) abortWithError(2);// or 50 degrees hotter, also abort
 
   if(currentState!=sAUTOTUNE)
-    PID.Compute();
+    heaterPID.Compute();
 
   if (currentState == sIDLE) {
     //all off in idle mode
@@ -761,28 +771,15 @@ void changeProfile(eventMask e) {
 }
 
 void loadParameters(uint8_t profile) {
-  uint8_t offset = 0;
+  uint16_t offset = 0;
   offset = profile * AMOUNT_EEPROM_PER_PROFILE;
 
-  activeProfile.soakTemp = EEPROM.read(offset++);
-  activeProfile.soakTemp |= EEPROM.read(offset++) << 8;
-
-  activeProfile.soakDuration = EEPROM.read(offset++);
-  activeProfile.soakDuration |= EEPROM.read(offset++) << 8;
-
-  activeProfile.peakTemp = EEPROM.read(offset++);
-  activeProfile.peakTemp |= EEPROM.read(offset++) << 8;
-
-  activeProfile.peakDuration = EEPROM.read(offset++);
-  activeProfile.peakDuration |= EEPROM.read(offset++) << 8;
-
-  int temp = EEPROM.read(offset++);
-  temp |= EEPROM.read(offset++) << 8;
-  activeProfile.rampUpRate = ((double)temp / 10);
-
-  temp = EEPROM.read(offset++);
-  temp |= EEPROM.read(offset++) << 8;
-  activeProfile.rampDownRate = ((double)temp / 10);
+  activeProfile.soakTemp = EEPROM.readInt(offset);  offset+=2;
+  activeProfile.soakDuration = EEPROM.readInt(offset);  offset+=2;
+  activeProfile.peakTemp = EEPROM.readInt(offset);  offset+=2;
+  activeProfile.peakDuration = EEPROM.readInt(offset);  offset+=2;
+  activeProfile.rampUpRate = EEPROM.readDouble(offset);  offset+=4;
+  activeProfile.rampDownRate = EEPROM.readDouble(offset);  offset+=4;
 
 }
 
@@ -821,45 +818,24 @@ void saveParameters(uint8_t profile) {
   uint16_t offset = 0;
   offset = profile * AMOUNT_EEPROM_PER_PROFILE;
 
-
-  EEPROM.write(offset++, lowByte(activeProfile.soakTemp));
-  EEPROM.write(offset++, highByte(activeProfile.soakTemp));
-
-  EEPROM.write(offset++, lowByte(activeProfile.soakDuration));
-  EEPROM.write(offset++, highByte(activeProfile.soakDuration));
-
-  EEPROM.write(offset++, lowByte(activeProfile.peakTemp));
-  EEPROM.write(offset++, highByte(activeProfile.peakTemp));
-
-  EEPROM.write(offset++, lowByte(activeProfile.peakDuration));
-  EEPROM.write(offset++, highByte(activeProfile.peakDuration));
-
-  int temp = activeProfile.rampUpRate * 10;
-  EEPROM.write(offset++, (temp & 255));
-  EEPROM.write(offset++, (temp >> 8) & 255);
-
-  temp = activeProfile.rampDownRate * 10;
-  EEPROM.write(offset++, (temp & 255));
-  EEPROM.write(offset++, (temp >> 8) & 255);
+	EEPROM.writeInt(offset,activeProfile.soakTemp);  offset+=2;
+	EEPROM.writeInt(offset,activeProfile.soakDuration);  offset+=2;
+	EEPROM.writeInt(offset,activeProfile.peakTemp);  offset+=2;
+	EEPROM.writeInt(offset,activeProfile.peakDuration);  offset+=2;
+	EEPROM.writeDouble(offset,activeProfile.rampUpRate);  offset+=4;
+	EEPROM.writeDouble(offset,activeProfile.rampDownRate);  offset+=4;
 
 }
 
 void loadSettings() {
   uint16_t offset = EEPROM_OFFSET_SETTINGS;
   
-  int temp = EEPROM.read(offset++);
-  temp |= EEPROM.read(offset++) << 8;
-  heaterKp = ((double)temp / 100);
+  heaterPIDparameter.P = EEPROM.readDouble(offset);  offset+=4;
+  heaterPIDparameter.I = EEPROM.readDouble(offset);  offset+=4;
+  heaterPIDparameter.D = EEPROM.readDouble(offset);  offset+=4;
+    
+  buzzerOn = EEPROM.readByte(offset++);
   
-  temp = EEPROM.read(offset++);
-  temp |= EEPROM.read(offset++) << 8;
-  heaterKi = ((double)temp / 100);
-  
-  temp = EEPROM.read(offset++);
-  temp |= EEPROM.read(offset++) << 8;
-  heaterKd = ((double)temp / 100);
-  
-  buzzerOn = EEPROM.read(offset++);
 }
 
 void saveSettings() {
@@ -868,19 +844,11 @@ void saveSettings() {
   //leave menu
   nav.doNav(escCmd);
   
-  int temp = heaterKp * 100;
-  EEPROM.write(offset++, (temp & 255));
-  EEPROM.write(offset++, (temp >> 8) & 255);
+  EEPROM.writeDouble(offset,heaterPIDparameter.P);  offset+=4;
+  EEPROM.writeDouble(offset,heaterPIDparameter.I);  offset+=4;
+  EEPROM.writeDouble(offset,heaterPIDparameter.D);  offset+=4;
   
-  temp = heaterKi * 100;
-  EEPROM.write(offset++, (temp & 255));
-  EEPROM.write(offset++, (temp >> 8) & 255);
-  
-  temp = heaterKd * 100;
-  EEPROM.write(offset++, (temp & 255));
-  EEPROM.write(offset++, (temp >> 8) & 255);
-  
-  EEPROM.write(offset++,buzzerOn);
+  EEPROM.writeByte(offset++,buzzerOn);
   
 }
 
@@ -911,9 +879,9 @@ void factoryReset() {
     saveParameters(i);
   }
 
-  heaterKp=HEATER_Kp;
-  heaterKi=HEATER_Ki;
-  heaterKd=HEATER_Kd;
+  heaterPIDparameter.P=HEATER_Kp;
+  heaterPIDparameter.I=HEATER_Ki;
+  heaterPIDparameter.D=HEATER_Kd;
   buzzerOn=BUZZER_DEFAULT;
   saveSettings();
   
