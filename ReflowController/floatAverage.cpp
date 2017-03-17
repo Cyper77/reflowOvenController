@@ -60,7 +60,7 @@ double floatAverageClass::getSlope() {
   FloatAverage_t sumY=0;
   uint8_t nextDataIndex=this->IndexNextValue;
   
-  for (uint8_t i = 0; i < SIZE_OF_AVG; ++i) {
+  for (uint8_t i = 1; i <= SIZE_OF_AVG; i++) {
     sumXY+=i*this->aData[nextDataIndex];
     sumY +=  this->aData[nextDataIndex];
     
