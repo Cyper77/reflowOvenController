@@ -14,7 +14,7 @@
     - use FilterAverage-Lib
     - Use 100k NTC as temperature sensor (standard in 3D-printing)
     - Safety-Check for illegal temperature reading
-    - RampRate math fixed
+    - RampRate via linear regression
     - BEEPER
     - PID-Autotune
     - EEPROMex with Double, etc.
@@ -61,6 +61,8 @@ struct PIDparameter {
 	double D;
 } heaterPIDparameter;
 
+uint16_t manualModeTemperatureSetpoint=0;
+uint16_t manualModeSSR1Duty=0;
 
 boolean buzzerOn=BUZZER_DEFAULT;
 
@@ -74,6 +76,7 @@ enum state {
   sRAMPDOWM,
   sCOOLDOWN,
   sAUTOTUNE,
+  sMANUAL,
 } currentState = sIDLE, lastState = sIDLE;
 boolean stateChanged = false;
 
@@ -95,6 +98,7 @@ void autotuneStart(void);
 void changeProfile(eventMask e);
 void saveProfile(eventMask e);
 void saveSettings();
+void allOff();
 
 boolean menuSuspended=true;
 //config menuOptions('>','-',false,false,defaultNavCodes,true);
@@ -144,9 +148,9 @@ MENU(menuSettings, "Settings", doNothing, noEvent, noStyle
 
 MENU(menuManualMode, "Manual Control", doNothing, anyEvent, noStyle
      , EXIT(" ^-")
-     , OP("All Off", doNothing, enterEvent )
-     , OP("Set Temperature", doNothing, enterEvent)
-     , OP("Set SSR1 Duty", doNothing, enterEvent)
+     , OP("All Off", allOff, enterEvent )
+     , FIELD(manualModeTemperatureSetpoint,      "Set Temperature",       "C",   50,    300,   5, 1,    doNothing, enterEvent, noStyle)
+     , FIELD(manualModeSSR1Duty,      "Set SSR1 Duty",       "%",   0,    100,   5, 1,    doNothing, enterEvent, noStyle)
      , OP("SSR2 On/Off", doNothing, enterEvent)
     );
 
@@ -227,16 +231,21 @@ PID heaterPID(&controlInput, &controlOutput, &controlSetpoint, heaterPIDparamete
 PID_ATune HeaterPIDautotune(&controlInput, &controlOutput);
 uint8_t heaterValue;
 
-
-
-
 double rampRate = 0;				//for calculated ramp rate
 boolean lastStopPinState = true;	//for debouncing
+
+void allOff() {
+  heaterPID.SetMode(MANUAL);
+  HeaterPIDautotune.Cancel();
+  digitalWrite(HEATING_PIN, LOW);
+  digitalWrite(FAN_PIN, LOW);
+  currentState=sCOOLDOWN;
+}
 
 void abortWithError(uint8_t error) {
   // set outputs off for safety.
   digitalWrite(HEATING_PIN, LOW);
-  //digitalWrite(FAN_PIN, LOW);
+  digitalWrite(FAN_PIN, LOW);
   
   if(buzzerOn)
 	  tone(BUZZER_PIN,1760,1000);  //Error Beep
@@ -328,6 +337,9 @@ void displayState() {
       break;
     case sAUTOTUNE:
       displayPaddedString(("Autotune"), 9);
+      break;
+    case sMANUAL:
+      displayPaddedString(("!MANUAL!"), 9);
       break;
   }
 }
@@ -638,6 +650,19 @@ void loop() {
             tft.print("Kd: "); tft.print((uint32_t)(heaterPID.Kd * 100));
             */
           }
+
+        break;
+        
+        case sMANUAL:
+          if (stateChanged) {
+            stateChanged = false;
+
+            //init manual mode
+            
+            //heaterPID.SetMode(AUTOMATIC);
+          }
+
+          
 
         break;
     }

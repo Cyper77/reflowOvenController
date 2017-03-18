@@ -6,11 +6,11 @@
 
 // -------------------- Profile
 // this is the default profile, special profiles see in profiles.h
-#define PROFILE_DEFAULT_soakTemp      130;
-#define PROFILE_DEFAULT_soakDuration  30;
-#define PROFILE_DEFAULT_peakTemp      220;
-#define PROFILE_DEFAULT_peakDuration  10;
-#define PROFILE_DEFAULT_rampUpRate    0.80;
+#define PROFILE_DEFAULT_soakTemp      165;
+#define PROFILE_DEFAULT_soakDuration  90;
+#define PROFILE_DEFAULT_peakTemp      249;
+#define PROFILE_DEFAULT_peakDuration  20;
+#define PROFILE_DEFAULT_rampUpRate    1.0;
 #define PROFILE_DEFAULT_rampDownRate  3.0;
 
 #define IDLETEMP        50 // the temperature at which to consider the oven safe to leave to cool naturally
@@ -18,11 +18,13 @@
 
 // -------------------- Control
 #define MODULATION_WINDOWSIZE  100    //in ms
+                                      // Zero Crossing (and so switching current on/off by ssr with zero cross detection) ist 100Hz=10ms in 50Hz AC net.
+                                      // if window is 100ms and on-time any between 0...100ms the max resolution in switching is 10. thats way enough for heaters
 #define SIZE_OF_AVG 16    // over how many values the temperature is averaged
 
-#define HEATER_Kp   4.00
-#define HEATER_Ki   0.05
-#define HEATER_Kd   2.00
+#define HEATER_Kp   3.00
+#define HEATER_Ki   0.15
+#define HEATER_Kd   1.00
 
 // -------------------- Actuators, Heater, Fans
 #define HEATING_PIN     6		//SSR1
