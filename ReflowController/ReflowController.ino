@@ -9,7 +9,7 @@
   Changes
   -------
   v0.3
-    - Suited for Arduino Mega
+    - Suited for Arduinos with 64kb and above flash memory (e.g. Arduino Mega)
     - UI via Encoder and Pushbutton
     - use FilterAverage-Lib
     - Use 100k NTC as temperature sensor (standard in 3D-printing)
@@ -18,8 +18,6 @@
     - BEEPER
     - PID-Autotune
     - EEPROMex with Double, etc.
-  BUGS/TODOS:
-    - adapt output and switching freq to the zero crossing freq (100Hz), http://playground.arduino.cc/Code/PIDLibraryRelayOutputExample
 */
 
 #include <Arduino.h>
@@ -76,7 +74,8 @@ enum state {
   sRAMPDOWM,
   sCOOLDOWN,
   sAUTOTUNE,
-  sMANUAL,
+  sMANUAL_TEMPCONTROLLED,
+  sMANUAL_DUTYFIXED,
 } currentState = sIDLE, lastState = sIDLE;
 boolean stateChanged = false;
 
@@ -99,6 +98,8 @@ void changeProfile(eventMask e);
 void saveProfile(eventMask e);
 void saveSettings();
 void allOff();
+void manualModeDutyFixedStart();
+void manualModeTempControlledStart();
 
 boolean menuSuspended=true;
 //config menuOptions('>','-',false,false,defaultNavCodes,true);
@@ -149,8 +150,8 @@ MENU(menuSettings, "Settings", doNothing, noEvent, noStyle
 MENU(menuManualMode, "Manual Control", doNothing, anyEvent, noStyle
      , EXIT(" ^-")
      , OP("All Off", allOff, enterEvent )
-     , FIELD(manualModeTemperatureSetpoint,      "Set Temperature",       "C",   50,    300,   5, 1,    doNothing, enterEvent, noStyle)
-     , FIELD(manualModeSSR1Duty,      "Set SSR1 Duty",       "%",   0,    100,   5, 1,    doNothing, enterEvent, noStyle)
+     , FIELD(manualModeTemperatureSetpoint,      "Set Temperature",       "C",   50,    300,   5, 1,    manualModeTempControlledStart, exitEvent, noStyle)
+     , FIELD(manualModeSSR1Duty,      "Set SSR1 Duty",       "%",   0,    100,   5, 1,    manualModeDutyFixedStart, exitEvent, noStyle)
      , OP("SSR2 On/Off", doNothing, enterEvent)
     );
 
@@ -235,10 +236,15 @@ double rampRate = 0;				//for calculated ramp rate
 boolean lastStopPinState = true;	//for debouncing
 
 void allOff() {
+  //this function should bring the oven in a safe operating mode
+
+  //turn off everything
   heaterPID.SetMode(MANUAL);
   HeaterPIDautotune.Cancel();
   digitalWrite(HEATING_PIN, LOW);
   digitalWrite(FAN_PIN, LOW);
+
+  //set cooldown-state to prevent something is switching on, which better should not...
   currentState=sCOOLDOWN;
 }
 
@@ -338,8 +344,11 @@ void displayState() {
     case sAUTOTUNE:
       displayPaddedString(("Autotune"), 9);
       break;
-    case sMANUAL:
-      displayPaddedString(("!MANUAL!"), 9);
+    case sMANUAL_TEMPCONTROLLED:
+      displayPaddedString(("man.TEMP!"), 9);
+      break;
+    case sMANUAL_DUTYFIXED:
+      displayPaddedString(("man.DUTY!"), 9);
       break;
   }
 }
@@ -350,7 +359,7 @@ void displayCycleDuration() {
 		sprintf(buf, "%ds", (millis() - startTime) / 1000);
 		lcd.print(buf);
 	} else {
-		lcd.print("--");
+		lcd.print(F("     "));
 	}
 }
 
@@ -373,7 +382,7 @@ void updateDisplay(boolean fullUpdate=false) {
   if (therm1.getStatus() == 0) {
     displayTemperature(therm1.getTemperatureCelsius());
   } else {
-    lcd.print(F(" ---"));
+    lcd.print(F("   - "));
   }
 
   lcd.setCursor(16, 0);
@@ -640,26 +649,37 @@ void loop() {
             saveSettings();
 
             heaterPID.SetMode(MANUAL);
-            
-            /*
-            tft.setCursor(40, 40);
-            tft.print("Kp: "); tft.print((uint32_t)(heaterPID.Kp * 100));
-            tft.setCursor(40, 52);
-            tft.print("Ki: "); tft.print((uint32_t)(heaterPID.Ki * 100));
-            tft.setCursor(40, 64);
-            tft.print("Kd: "); tft.print((uint32_t)(heaterPID.Kd * 100));
-            */
+
+            lcd.clear();
+            lcd.print(F("Tuning finished, new parameters saved to EEPROM"));
+            delay(1500);
           }
 
         break;
         
-        case sMANUAL:
+        case sMANUAL_TEMPCONTROLLED:
           if (stateChanged) {
             stateChanged = false;
 
             //init manual mode
+
+            controlSetpoint=manualModeTemperatureSetpoint;
+            heaterPID.SetMode(AUTOMATIC);
+          }
+
+          
+
+        break;
+        
+        case sMANUAL_DUTYFIXED:
+          if (stateChanged) {
+            stateChanged = false;
+
+            //init manual mode
+
+            heaterValue=manualModeSSR1Duty;
+            heaterPID.SetMode(MANUAL);
             
-            //heaterPID.SetMode(AUTOMATIC);
           }
 
           
@@ -668,13 +688,11 @@ void loop() {
     }
   }
 
-  // safety check that we're not doing something stupid.
-  // if the thermocouple is wired backwards, temp goes DOWN when it increases
-  // during cooling, the t962a lags a long way behind, hence the hugely lenient cooling allowance.
 
   // both of these errors are blocking and do not exit!
   if (controlSetpoint > controlInput + 50) abortWithError(1); // if we're 50 degree cooler than setpoint, abort
   //if(Input > Setpoint + 50) abortWithError(2);// or 50 degrees hotter, also abort
+  
 
   if(currentState!=sAUTOTUNE)
     heaterPID.Compute();
@@ -719,6 +737,37 @@ void loop() {
   }
 
 }
+
+void manualModeTempControlledStart() {
+
+  currentState = sMANUAL_TEMPCONTROLLED;
+  
+  lcd.clear();
+  lcd.print("Starting manual mode");
+  delay(1000);
+
+  //time the cycle started
+  startTime = millis();
+  
+  //suspend menu go to status screen
+  nav.idleOn(idle);
+}
+
+void manualModeDutyFixedStart() {
+
+  currentState = sMANUAL_DUTYFIXED;
+  
+  lcd.clear();
+  lcd.print("Starting manual mode");
+  delay(1000);
+
+  //time the cycle started
+  startTime = millis();
+  
+  //suspend menu go to status screen
+  nav.idleOn(idle);
+}
+
 
 //start a cycle
 void cycleStart() {
