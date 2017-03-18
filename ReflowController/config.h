@@ -22,14 +22,24 @@
                                       // if window is 100ms and on-time any between 0...100ms the max resolution in switching is 10. thats way enough for heaters
 #define SIZE_OF_AVG 16    // over how many values the temperature is averaged
 
-#define HEATER_Kp   3.00
-#define HEATER_Ki   0.15
-#define HEATER_Kd   1.00
+#define HEATER_Kp   9.00
+#define HEATER_Ki   0.00
+#define HEATER_Kd   0.00
+
+//TODO: think about that...
+#define HEATER_Kp_aggressive 12.0
+#define HEATER_Ki_aggressive 0.0
+#define HEATER_Kd_aggressive 0.0
+
+//TODO: think about that, too...
+#define USE_MAP_BASED_PILOT_CONTROL 0
+#define MAP_BASED_PILOT_CONTROL_M 0.1834
+#define MAP_BASED_PILOT_CONTROL_B -5.7
 
 // -------------------- Actuators, Heater, Fans
 #define HEATING_PIN     6		//SSR1
 #define FAN_PIN         5		//SSR2
-#define BUZZER_PIN		7
+#define BUZZER_PIN		  7
 #define BUZZER_DEFAULT	1		//1 on 0 off
 
 // -------------------- Sensors, Buttons, Encoders
@@ -37,9 +47,9 @@
 #define TEMP1_ADC 1			//Analog ADC1
 
 #define STOP_SWITCH_PIN     0
-#define ENCODER_A_PIN       2
-#define ENCODER_B_PIN       3
-#define ENCODER_BUTTON_PIN  4
+#define ENCODER_A_PIN       A8  // if using encoderIn.h as input pay attention on following advice:
+#define ENCODER_B_PIN       A9  // EncoderA/B-Pins have to feature PCINT. Thats true for 2/3 on UNO and A8/A9 on MEGA2560
+#define ENCODER_BUTTON_PIN  4   // alternatively use ClickEncoderIn.h
 
 
 // -------------------- LCD

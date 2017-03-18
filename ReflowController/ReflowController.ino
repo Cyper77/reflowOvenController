@@ -46,6 +46,7 @@ uint8_t profileNumber = 0;
 
 // PID variables
 double controlSetpoint, controlInput, controlOutput;
+double heaterValueAdditionalTerm;
 struct autotuneParameter {
   uint16_t targetTemperature=220;
   uint16_t startOutput=80;
@@ -100,6 +101,7 @@ void saveSettings();
 void allOff();
 void manualModeDutyFixedStart();
 void manualModeTempControlledStart();
+void factoryReset();
 
 boolean menuSuspended=true;
 //config menuOptions('>','-',false,false,defaultNavCodes,true);
@@ -131,35 +133,40 @@ keyIn<1> encButton(encBtn_map);         //1 is the number of keys
 // ----------- MENU setup
 MENU(menuEditProfile, "Edit Profile", doNothing, noEvent, noStyle
      , OP(" ^.. & save", saveProfile, enterEvent )
-     , FIELD(activeProfile.rampUpRate,    "  Up rate",     "C/s", 0.1,      5,   0.1, 0,  doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.soakTemp,      "Soak temp",       "C",    50,    180,   5, 1,    doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.soakDuration,  "Soak time",       "s",    10,    300,   5, 1,    doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.peakTemp,      "Peak temp",       "C",   100,    300,   5, 1,    doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.peakDuration,  "Peak time",       "s",     5,    120,   5, 1,    doNothing, noEvent, noStyle)
-     , FIELD(activeProfile.rampDownRate,  "Down rate",     "C/s", 0.1,       10, 0.1, 0,  doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.rampUpRate,    "  Up rate",     " C/s", 0.1,      5,   0.1, 0,  doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.soakTemp,      "Soak temp",       " C",    50,    180,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.soakDuration,  "Soak time",       " s",    10,    300,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.peakTemp,      "Peak temp",       " C",   100,    300,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.peakDuration,  "Peak time",       " s",     5,    120,   5, 1,    doNothing, noEvent, noStyle)
+     , FIELD(activeProfile.rampDownRate,  "Down rate",     " C/s", 0.1,       10, 0.1, 0,  doNothing, noEvent, noStyle)
     );
+
+TOGGLE(buzzerOn,buzzerCtrl,"Buzzer: ",doNothing,noEvent,noStyle
+  ,VALUE("On",true,doNothing,noEvent)
+  ,VALUE("Off",false,doNothing,noEvent)
+);
 
 MENU(menuSettings, "Settings", doNothing, noEvent, noStyle
      , OP(" ^.. & save", saveSettings, enterEvent )
-     , FIELD(heaterPIDparameter.P, "Heater kP", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
-     , FIELD(heaterPIDparameter.I, "Heater kI", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
-     , FIELD(heaterPIDparameter.D, "Heater kD", "", 0, 100, 1, 0.1, doNothing, noEvent, noStyle)
-     , OP("Buzzer On/Off", doNothing, enterEvent)
+     , FIELD(heaterPIDparameter.P, "Heater kP", "", 0, 40, 0.1, 0.01, doNothing, noEvent, noStyle)
+     , FIELD(heaterPIDparameter.I, "Heater kI", "", 0, 40, 0.1, 0.01, doNothing, noEvent, noStyle)
+     , FIELD(heaterPIDparameter.D, "Heater kD", "", 0, 40, 0.1, 0.01, doNothing, noEvent, noStyle)
+     , SUBMENU(buzzerCtrl)
     );
 
 MENU(menuManualMode, "Manual Control", doNothing, anyEvent, noStyle
      , EXIT(" ^-")
      , OP("All Off", allOff, enterEvent )
-     , FIELD(manualModeTemperatureSetpoint,      "Set Temperature",       "C",   50,    300,   5, 1,    manualModeTempControlledStart, exitEvent, noStyle)
-     , FIELD(manualModeSSR1Duty,      "Set SSR1 Duty",       "%",   0,    100,   5, 1,    manualModeDutyFixedStart, exitEvent, noStyle)
-     , OP("SSR2 On/Off", doNothing, enterEvent)
+     , FIELD(manualModeTemperatureSetpoint,      "Set Temperature",       " C",   50,    300,   5, 1,    manualModeTempControlledStart, exitEvent, noStyle)
+     , FIELD(manualModeSSR1Duty,      "Set SSR1 Duty",       " %",   0,    100,   5, 1,    manualModeDutyFixedStart, exitEvent, noStyle)
+     //, OP("SSR2 On/Off", doNothing, enterEvent)
     );
 
 MENU(menuAutotune, "PID Autotune", doNothing, anyEvent, noStyle
      , EXIT(" ^-")
-     , FIELD(autotune.targetTemperature,    "Target Temp.",     "C", 0,      280,   5, 1,  doNothing, noEvent, noStyle)
-     , FIELD(autotune.startOutput,    "Start Output",     "%", 0,      100,   5, 1,  doNothing, noEvent, noStyle)
-     , FIELD(autotune.noiseBand,    "Noiseband",     "", 0.1,      10,   0.1, 0,  doNothing, noEvent, noStyle)
+     , FIELD(autotune.targetTemperature,    "Target Temp.",     " C", 0,      280,   5, 1,  doNothing, noEvent, noStyle)
+     , FIELD(autotune.startOutput,    "Start Output",     " %", 0,      100,   5, 1,  doNothing, noEvent, noStyle)
+     , FIELD(autotune.noiseBand,    "Noiseband",     " C", 0.1,      10,   0.1, 0,  doNothing, noEvent, noStyle)
      , FIELD(autotune.tuneStep,    "Tunestep",     "", 0.1,      100,   1, 0.1,  doNothing, noEvent, noStyle)
      , OP("Start Autotune", autotuneStart, enterEvent)
     );
@@ -167,7 +174,8 @@ MENU(menuAutotune, "PID Autotune", doNothing, anyEvent, noStyle
 MENU(menuFactoryReset, "Factory Reset", doNothing, noEvent, noStyle
      , EXIT(" ^-")
      , EXIT("No")
-     , OP("Yes", doNothing, anyEvent)
+     , OP("Yes", factoryReset, enterEvent)
+     , EXIT("No")
     );
 
 
@@ -230,28 +238,31 @@ unsigned long startTime, stateChangedTime = 0, lastUpdate = 0, lastDisplayUpdate
 //Specify the links and initial tuning parameters
 PID heaterPID(&controlInput, &controlOutput, &controlSetpoint, heaterPIDparameter.P, heaterPIDparameter.I, heaterPIDparameter.D, DIRECT);
 PID_ATune HeaterPIDautotune(&controlInput, &controlOutput);
-uint8_t heaterValue;
+int heaterValue;
 
 double rampRate = 0;				//for calculated ramp rate
 boolean lastStopPinState = true;	//for debouncing
 
 void allOff() {
   //this function should bring the oven in a safe operating mode
-
+  controlSetpoint=0;
+  
   //turn off everything
   heaterPID.SetMode(MANUAL);
   HeaterPIDautotune.Cancel();
   digitalWrite(HEATING_PIN, LOW);
   digitalWrite(FAN_PIN, LOW);
-
+  
+  //turn autotuner off if it was running
+  HeaterPIDautotune.Cancel();
+  
   //set cooldown-state to prevent something is switching on, which better should not...
   currentState=sCOOLDOWN;
 }
 
 void abortWithError(uint8_t error) {
   // set outputs off for safety.
-  digitalWrite(HEATING_PIN, LOW);
-  digitalWrite(FAN_PIN, LOW);
+  allOff();
   
   if(buzzerOn)
 	  tone(BUZZER_PIN,1760,1000);  //Error Beep
@@ -359,7 +370,7 @@ void displayCycleDuration() {
 		sprintf(buf, "%ds", (millis() - startTime) / 1000);
 		lcd.print(buf);
 	} else {
-		lcd.print(F("     "));
+		lcd.print(F("    "));
 	}
 }
 
@@ -382,7 +393,7 @@ void updateDisplay(boolean fullUpdate=false) {
   if (therm1.getStatus() == 0) {
     displayTemperature(therm1.getTemperatureCelsius());
   } else {
-    lcd.print(F("   - "));
+    lcd.print(F("     "));
   }
 
   lcd.setCursor(16, 0);
@@ -450,7 +461,7 @@ void setup() {
   therm1.setup(TEMP1_ADC);
 
   // ---------------- PID setup
-  heaterPID.SetOutputLimits(0, MODULATION_WINDOWSIZE);
+  heaterPID.SetOutputLimits(-MODULATION_WINDOWSIZE, MODULATION_WINDOWSIZE);
   heaterPID.SetSampleTime(100);
 
   if (therm0.getStatus() != 0) {
@@ -484,7 +495,12 @@ void loop() {
     controlInput = therm0.getTemperatureCelsius(); // update the variable the PID reads
     //Serial.print("Temp1= ");
     //Serial.println(readings[index]);
-
+#ifdef USE_MAP_BASED_PILOT_CONTROL == 1
+    //update map based pilot control
+    heaterValueAdditionalTerm=((double)(MAP_BASED_PILOT_CONTROL_M)*controlInput)+(MAP_BASED_PILOT_CONTROL_B);
+#else
+    heaterValueAdditionalTerm=0;
+#endif
     // if the state has changed, set the flags and update the time of state change
     if (currentState != lastState) {
       lastState = currentState;
@@ -507,15 +523,15 @@ void loop() {
     boolean stopPin = digitalRead(STOP_SWITCH_PIN); // check the state of the stop key
     if (stopPin == LOW && lastStopPinState != stopPin) { // if the state has just changed
       //debounced keypress
+
+      allOff();
+      
       if (currentState == sCOOLDOWN) {
         currentState = sIDLE;
       } else if (currentState != sIDLE) {
         currentState = sCOOLDOWN;
       }
 
-      //turn autotuner off if it was running
-      HeaterPIDautotune.Cancel();
-      
     }
     lastStopPinState = stopPin;
 
@@ -537,7 +553,6 @@ void loop() {
     		  if(buzzerOn)
     		    tone(BUZZER_PIN,1760,50);
           heaterPID.SetMode(MANUAL);
-          controlOutput = 80;
           heaterPID.SetControllerDirection(DIRECT);
           heaterPID.SetTunings(heaterPIDparameter.P, heaterPIDparameter.I, heaterPIDparameter.D);
           controlSetpoint = therm0.getTemperatureCelsius();    //start at current measured temeprature in the moment of changing state
@@ -662,8 +677,9 @@ void loop() {
             stateChanged = false;
 
             //init manual mode
-
-            controlSetpoint=manualModeTemperatureSetpoint;
+            heaterPID.SetMode(MANUAL);
+            heaterPID.SetControllerDirection(DIRECT);
+            heaterPID.SetTunings(heaterPIDparameter.P, heaterPIDparameter.I, heaterPIDparameter.D);
             heaterPID.SetMode(AUTOMATIC);
           }
 
@@ -677,7 +693,6 @@ void loop() {
 
             //init manual mode
 
-            heaterValue=manualModeSSR1Duty;
             heaterPID.SetMode(MANUAL);
             
           }
@@ -689,10 +704,14 @@ void loop() {
   }
 
 
-  // both of these errors are blocking and do not exit!
-  if (controlSetpoint > controlInput + 50) abortWithError(1); // if we're 50 degree cooler than setpoint, abort
-  //if(Input > Setpoint + 50) abortWithError(2);// or 50 degrees hotter, also abort
   
+  if (currentState != sMANUAL_TEMPCONTROLLED && currentState != sAUTOTUNE) {
+    //check for errors only in automatic modes
+    
+    // both of these errors are blocking and do not exit!
+    if (controlSetpoint > controlInput + 50) abortWithError(1); // if we're 50 degree cooler than setpoint, abort
+    //if(Input > Setpoint + 50) abortWithError(2);// or 50 degrees hotter, also abort
+  }
 
   if(currentState!=sAUTOTUNE)
     heaterPID.Compute();
@@ -705,10 +724,19 @@ void loop() {
     // in cooling phases turn heater off hard and control fan instead
     heaterValue = 0;
     //fanValue = controlOutput;
+  } else if (currentState == sMANUAL_DUTYFIXED) { 
+    // leave as is... new value is passed via menu and its callback-function
   } else {
     // other phases are non-idle or heating-phases
     // heater is controlled by PID and fan is on assisting speed
-    heaterValue = controlOutput;
+    heaterValue = controlOutput + heaterValueAdditionalTerm;
+
+    if(heaterValue<0)
+      heaterValue=0;
+    
+    if(heaterValue>100)
+      heaterValue=100;
+      
     //fanValue = fanAssistSpeed;
   }
 
@@ -741,6 +769,11 @@ void loop() {
 void manualModeTempControlledStart() {
 
   currentState = sMANUAL_TEMPCONTROLLED;
+
+  controlSetpoint=manualModeTemperatureSetpoint;
+  //set current Tuning parameters
+  heaterPID.SetTunings(heaterPIDparameter.P, heaterPIDparameter.I, heaterPIDparameter.D);
+  
   
   lcd.clear();
   lcd.print("Starting manual mode");
@@ -756,6 +789,8 @@ void manualModeTempControlledStart() {
 void manualModeDutyFixedStart() {
 
   currentState = sMANUAL_DUTYFIXED;
+
+  heaterValue=manualModeSSR1Duty;
   
   lcd.clear();
   lcd.print("Starting manual mode");
@@ -790,6 +825,9 @@ void cycleStart() {
 void autotuneStart() {
 
   currentState = sAUTOTUNE;
+
+  //set current Tuning parameters
+  heaterPID.SetTunings(heaterPIDparameter.P, heaterPIDparameter.I, heaterPIDparameter.D);
   
   lcd.clear();
   lcd.print("Starting Autotune");
@@ -964,6 +1002,10 @@ void factoryReset() {
   profileNumber = 0;
   saveLastUsedProfile();
 
+
+  loadLastUsedProfile();
+  loadSettings();
+  
   delay(100);
 }
 
@@ -983,7 +1025,7 @@ void loadLastUsedProfile() {
 void sendSerialUpdate() {
 
   if (currentState == sIDLE) {
-    Serial.print(F("0,0,0,0,"));
+    Serial.print(F("0,0,0,0,0,"));
     Serial.print(therm0.getTemperatureCelsius());
     Serial.print(",");
     if (therm1.getStatus() == 0) {
@@ -992,7 +1034,13 @@ void sendSerialUpdate() {
       Serial.print("999");
     }
     Serial.print(",");
-    Serial.println(rampRate);
+    Serial.print(rampRate);
+    Serial.print(",");
+    Serial.print(heaterPID.GetKp());
+    Serial.print(",");
+    Serial.print(heaterPID.GetKi());
+    Serial.print(",");
+    Serial.println(heaterPID.GetKd());
   } else {
 
     Serial.print(millis() - startTime);
@@ -1002,8 +1050,8 @@ void sendSerialUpdate() {
     Serial.print(controlSetpoint);
     Serial.print(",");
     Serial.print(heaterValue);
-    //Serial.print(",");
-    //Serial.print(fanValue);
+    Serial.print(",");
+    Serial.print(/*fanValue*/0);
     Serial.print(",");
     Serial.print(therm0.getTemperatureCelsius());
     Serial.print(",");
@@ -1013,7 +1061,13 @@ void sendSerialUpdate() {
       Serial.print("999");
     }
     Serial.print(",");
-    Serial.println(rampRate);
+    Serial.print(rampRate);
+    Serial.print(",");
+    Serial.print(heaterPID.GetKp());
+    Serial.print(",");
+    Serial.print(heaterPID.GetKi());
+    Serial.print(",");
+    Serial.println(heaterPID.GetKd());
   }
 }
   
