@@ -29,10 +29,13 @@ void temperatureSensorClass::triggerTemperatureMeasurement() {
 
 uint16_t temperatureSensorClass::readTemperatureRaw() {
   //get raw value
-  uint16_t rawtemp = analogRead(this->pin);
-
+  uint16_t rawtemp=0;
+  for (uint8_t i=1; i<=OVERSAMPLENR; i++) {
+    rawtemp += analogRead(this->pin);
+  }
+  
   //sanity check
-  if(rawtemp<=5 || rawtemp>1018) {
+  if(rawtemp<=5*OVERSAMPLENR || rawtemp>1018*OVERSAMPLENR) {
     this->status=1;
     //go on but set error flag for signaling
   }
