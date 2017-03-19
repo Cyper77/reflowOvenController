@@ -148,17 +148,17 @@ TOGGLE(buzzerOn,buzzerCtrl,"Buzzer: ",doNothing,noEvent,noStyle
 
 MENU(menuSettings, "Settings", doNothing, noEvent, noStyle
      , OP(" ^.. & save", saveSettings, enterEvent )
-     , FIELD(heaterPIDparameter.P, "Heater kP", "", 0, 40, 0.1, 0.01, doNothing, noEvent, noStyle)
-     , FIELD(heaterPIDparameter.I, "Heater kI", "", 0, 40, 0.1, 0.01, doNothing, noEvent, noStyle)
-     , FIELD(heaterPIDparameter.D, "Heater kD", "", 0, 40, 0.1, 0.01, doNothing, noEvent, noStyle)
+     , FIELD(heaterPIDparameter.P, "Heater kP", "", 0, 100, 0.1, 0.01, doNothing, noEvent, noStyle)
+     , FIELD(heaterPIDparameter.I, "Heater kI", "", 0, 100, 0.1, 0.01, doNothing, noEvent, noStyle)
+     , FIELD(heaterPIDparameter.D, "Heater kD", "", 0, 100, 0.1, 0.01, doNothing, noEvent, noStyle)
      , SUBMENU(buzzerCtrl)
     );
 
 MENU(menuManualMode, "Manual Control", doNothing, anyEvent, noStyle
      , EXIT(" ^-")
      , OP("All Off", allOff, enterEvent )
-     , FIELD(manualModeTemperatureSetpoint,      "Set Temperature",       " C",   50,    300,   5, 1,    manualModeTempControlledStart, exitEvent, noStyle)
-     , FIELD(manualModeSSR1Duty,      "Set SSR1 Duty",       " %",   0,    100,   5, 1,    manualModeDutyFixedStart, exitEvent, noStyle)
+     , FIELD(manualModeTemperatureSetpoint,      "Set Temp.",       " C",   50,    300,   5, 1,    manualModeTempControlledStart, exitEvent, noStyle)
+     , FIELD(manualModeSSR1Duty,      "Set SSR1 Duty",       " %",   0,    1000,   20, 5,    manualModeDutyFixedStart, exitEvent, noStyle)
      //, OP("SSR2 On/Off", doNothing, enterEvent)
     );
 
@@ -248,8 +248,7 @@ void allOff() {
   controlSetpoint=0;
   
   //turn off everything
-  heaterPID.SetMode(MANUAL);
-  HeaterPIDautotune.Cancel();
+  //heaterPID.SetMode(MANUAL);
   digitalWrite(HEATING_PIN, LOW);
   digitalWrite(FAN_PIN, LOW);
   
@@ -301,7 +300,8 @@ void displayTemperature(double val) {
   lcd.print(F("C"));
 }
 
-void displayOutputPower(uint8_t val) {
+void displayOutputPower(int val) {
+  if (val <= 999) lcd.print(" ");
   if (val <= 99) lcd.print(" ");
   if (val <= 9) lcd.print(" ");
   lcd.print(val);
@@ -461,7 +461,8 @@ void setup() {
   therm1.setup(TEMP1_ADC);
 
   // ---------------- PID setup
-  heaterPID.SetOutputLimits(-MODULATION_WINDOWSIZE, MODULATION_WINDOWSIZE);
+  heaterPID.SetMode(AUTOMATIC);
+  heaterPID.SetOutputLimits(0, MODULATION_WINDOWSIZE);
   heaterPID.SetSampleTime(100);
 
   if (therm0.getStatus() != 0) {
@@ -495,7 +496,7 @@ void loop() {
     controlInput = therm0.getTemperatureCelsius(); // update the variable the PID reads
     //Serial.print("Temp1= ");
     //Serial.println(readings[index]);
-#ifdef USE_MAP_BASED_PILOT_CONTROL == 1
+#if USE_MAP_BASED_PILOT_CONTROL == 1
     //update map based pilot control
     heaterValueAdditionalTerm=((double)(MAP_BASED_PILOT_CONTROL_M)*controlInput)+(MAP_BASED_PILOT_CONTROL_B);
 #else
@@ -552,15 +553,21 @@ void loop() {
         if (stateChanged) {
     		  if(buzzerOn)
     		    tone(BUZZER_PIN,1760,50);
-          heaterPID.SetMode(MANUAL);
-          heaterPID.SetControllerDirection(DIRECT);
-          heaterPID.SetTunings(heaterPIDparameter.P, heaterPIDparameter.I, heaterPIDparameter.D);
+
+          //aggressive ramp-mode
+          heaterPID.SetTunings(HEATER_Kp_ramps, HEATER_Ki_ramps, HEATER_Kd_ramps);
+          
           controlSetpoint = therm0.getTemperatureCelsius();    //start at current measured temeprature in the moment of changing state
-          heaterPID.SetMode(AUTOMATIC);
+          //heaterPID.SetMode(AUTOMATIC);
           stateChanged = false;
         }
         controlSetpoint += (activeProfile.rampUpRate / 10); // target set ramp up rate
 
+        //return to conservative heating
+        if (controlInput + GAP_TO_RETURN_TO_CONSERVATIVE_MODE >= activeProfile.soakTemp ) {
+          heaterPID.SetTunings(heaterPIDparameter.P,heaterPIDparameter.I,heaterPIDparameter.D);
+        }
+        
         if (controlSetpoint >= activeProfile.soakTemp - 1) {
           currentState = sSOAK;
         }
@@ -582,11 +589,20 @@ void loop() {
         if (stateChanged) {
     		  if(buzzerOn)
     			  tone(BUZZER_PIN,1760,50);
+
+          //aggressive ramp-mode
+          heaterPID.SetTunings(HEATER_Kp_ramps, HEATER_Ki_ramps, HEATER_Kd_ramps);
+          
           stateChanged = false;
         }
-
+        
         controlSetpoint += (activeProfile.rampUpRate / 10); // target set ramp up rate
-
+        
+        //return to conservative heating
+        if (controlInput + GAP_TO_RETURN_TO_CONSERVATIVE_MODE >= activeProfile.peakTemp) {
+          heaterPID.SetTunings(heaterPIDparameter.P,heaterPIDparameter.I,heaterPIDparameter.D);
+        }
+        
         if (controlSetpoint >= activeProfile.peakTemp - 1) { // seems to take arodun 8 degrees rise to tail off to 0 rise
           controlSetpoint = activeProfile.peakTemp;
           currentState = sPEAK;
@@ -630,7 +646,6 @@ void loop() {
         }
         if (controlInput < (IDLETEMP + 5)) {
           currentState = sIDLE;
-          heaterPID.SetMode(MANUAL);
     		  if(buzzerOn)
     		    tone(BUZZER_PIN,1760,100);
           controlOutput = 0;
@@ -649,7 +664,6 @@ void loop() {
             HeaterPIDautotune.SetLookbackSec((int)20);  //seconds: integer. think about how far apart the peaks are. 1/4-1/2 of this distance is a good value
             HeaterPIDautotune.SetControlType(1);        // 0: PI 1: PID
             
-            heaterPID.SetMode(AUTOMATIC);
           }
 
           
@@ -663,7 +677,7 @@ void loop() {
             heaterPID.SetTunings(heaterPIDparameter.P,heaterPIDparameter.I,heaterPIDparameter.D);
             saveSettings();
 
-            heaterPID.SetMode(MANUAL);
+
 
             lcd.clear();
             lcd.print(F("Tuning finished, new parameters saved to EEPROM"));
@@ -677,10 +691,8 @@ void loop() {
             stateChanged = false;
 
             //init manual mode
-            heaterPID.SetMode(MANUAL);
-            heaterPID.SetControllerDirection(DIRECT);
             heaterPID.SetTunings(heaterPIDparameter.P, heaterPIDparameter.I, heaterPIDparameter.D);
-            heaterPID.SetMode(AUTOMATIC);
+            
           }
 
           
@@ -693,7 +705,6 @@ void loop() {
 
             //init manual mode
 
-            heaterPID.SetMode(MANUAL);
             
           }
 
@@ -731,21 +742,21 @@ void loop() {
     // heater is controlled by PID and fan is on assisting speed
     heaterValue = controlOutput + heaterValueAdditionalTerm;
 
-    if(heaterValue<0)
+    /*if(heaterValue<0)
       heaterValue=0;
-    
-    if(heaterValue>100)
-      heaterValue=100;
+    */
+    if(heaterValue>MODULATION_WINDOWSIZE)
+      heaterValue=MODULATION_WINDOWSIZE;
       
     //fanValue = fanAssistSpeed;
   }
 
-  if ( (millis() - windowStartTime) > MODULATION_WINDOWSIZE) {
+  if ( (millis() - windowStartTime) > MODULATION_SWITCH_PERIOD) {
     //time to shift the Relay Window
-    windowStartTime += MODULATION_WINDOWSIZE;
+    windowStartTime += MODULATION_SWITCH_PERIOD;
   }
 
-  if ( heaterValue < (millis() - windowStartTime) ) {
+  if ( heaterValue*(MODULATION_SWITCH_PERIOD/MODULATION_WINDOWSIZE) < (millis() - windowStartTime) ) {
     digitalWrite(HEATING_PIN, LOW);
   } else {
     digitalWrite(HEATING_PIN, HIGH);
@@ -1023,7 +1034,7 @@ void loadLastUsedProfile() {
 }
 
 void sendSerialUpdate() {
-
+  char floatBuffer[20];
   if (currentState == sIDLE) {
     Serial.print(F("0,0,0,0,0,"));
     Serial.print(therm0.getTemperatureCelsius());
@@ -1036,11 +1047,15 @@ void sendSerialUpdate() {
     Serial.print(",");
     Serial.print(rampRate);
     Serial.print(",");
-    Serial.print(heaterPID.GetKp());
+    Serial.print(dtostrf(heaterPID.GetKp(), 6+3, 6, floatBuffer));
     Serial.print(",");
-    Serial.print(heaterPID.GetKi());
+    Serial.print(dtostrf(heaterPID.GetKi(), 6+3, 6, floatBuffer));
     Serial.print(",");
-    Serial.println(heaterPID.GetKd());
+    Serial.print(dtostrf(heaterPID.GetKd(), 6+3, 6, floatBuffer));
+    Serial.print(",");
+    Serial.print(dtostrf(controlInput, 6+3, 6, floatBuffer));
+    Serial.print(",");
+    Serial.println(dtostrf(controlOutput, 6+3, 6, floatBuffer));
   } else {
 
     Serial.print(millis() - startTime);
@@ -1063,11 +1078,16 @@ void sendSerialUpdate() {
     Serial.print(",");
     Serial.print(rampRate);
     Serial.print(",");
-    Serial.print(heaterPID.GetKp());
+    Serial.print(dtostrf(heaterPID.GetKp(), 6+3, 6, floatBuffer));
     Serial.print(",");
-    Serial.print(heaterPID.GetKi());
+    Serial.print(dtostrf(heaterPID.GetKi(), 6+3, 6, floatBuffer));
     Serial.print(",");
-    Serial.println(heaterPID.GetKd());
+    Serial.print(dtostrf(heaterPID.GetKd(), 6+3, 6, floatBuffer));
+    Serial.print(",");
+    Serial.print(dtostrf(controlInput, 6+3, 6, floatBuffer));
+    Serial.print(",");
+    Serial.println(dtostrf(controlOutput, 6+3, 6, floatBuffer));
+    
   }
 }
   

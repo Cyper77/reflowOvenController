@@ -17,21 +17,25 @@
 
 
 // -------------------- Control
+#define MODULATION_SWITCH_PERIOD 1000 //ms
 #define MODULATION_WINDOWSIZE  100    //in ms
                                       // Zero Crossing (and so switching current on/off by ssr with zero cross detection) ist 100Hz=10ms in 50Hz AC net.
                                       // if window is 100ms and on-time any between 0...100ms the max resolution in switching is 10. thats way enough for heaters
 #define SIZE_OF_AVG 16    // over how many values the temperature is averaged
 
-#define HEATER_Kp   9.00
-#define HEATER_Ki   0.00
-#define HEATER_Kd   0.00
+#define MAX_HEAT_RAMP_AT_FULL_POWER 1.1 //°C/s
+#define HEATER_Kp   4.4//2.2//4.4
+#define HEATER_Ki   0.08//0.03//0.12
+#define HEATER_Kd   40//20.0//39.6
 
 //TODO: think about that...
-#define HEATER_Kp_aggressive 12.0
-#define HEATER_Ki_aggressive 0.0
-#define HEATER_Kd_aggressive 0.0
+#define GAP_TO_RETURN_TO_CONSERVATIVE_MODE 20    //degrees
+#define HEATER_Kp_ramps 24.0
+#define HEATER_Ki_ramps 0.0
+#define HEATER_Kd_ramps 0.0
 
 //TODO: think about that, too...
+//if using this, the controller has to have the ability to go negative... (SetOutputLimits)
 #define USE_MAP_BASED_PILOT_CONTROL 0
 #define MAP_BASED_PILOT_CONTROL_M 0.1834
 #define MAP_BASED_PILOT_CONTROL_B -5.7
